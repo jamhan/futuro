@@ -1,0 +1,4 @@
+# Prevent .env from being staged (per SECURITY-AUDIT.md)
+./scripts/check-no-env-staged.sh
+
+npm test
