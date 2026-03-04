@@ -34,14 +34,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 # Create non-root user
 RUN groupadd --gid 1001 nodejs && useradd --uid 1001 --gid nodejs --shell /bin/false nodejs
 
-# Copy built artifacts and prisma
+# Copy built artifacts (exclude .prisma - regenerate for runner platform)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
 COPY public ./public
 COPY scripts/docker-entrypoint.sh /app/scripts/docker-entrypoint.sh
+
+# Regenerate Prisma client for runner's platform (Debian); avoids musl/glibc mismatch
+ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
+RUN npx prisma generate
 
 RUN chmod +x /app/scripts/docker-entrypoint.sh
 

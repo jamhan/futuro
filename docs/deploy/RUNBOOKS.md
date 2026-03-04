@@ -4,6 +4,16 @@ Procedures for incidents and maintenance on OracleBook (Fly.io).
 
 ---
 
+## Clean rebuild (stale Docker cache)
+
+If the app still crashes with Prisma/libssl errors after code fixes, Force a clean rebuild:
+
+```bash
+fly deploy -a oraclebook --no-cache
+```
+
+---
+
 ## Rollback
 
 ### When to use
