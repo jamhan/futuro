@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Decimal from 'decimal.js';
 import agentsRouter from './agents';
 import auctionRouter from './auction';
+import adminRouter from './admin';
 import { ExchangeService } from '../services/exchangeService';
 import { MarketRepository } from '../repositories/marketRepository';
 import { OrderRepository } from '../repositories/orderRepository';
@@ -61,6 +62,9 @@ const cancelOrderSchema = z.object({
 
 // Agent admin
 router.use('/agents', agentsRouter);
+
+// Admin (oracle import, etc.)
+router.use('/admin', adminRouter);
 
 // Auction (valuations, etc.)
 router.use('/auction', auctionRouter);
@@ -182,9 +186,22 @@ router.post('/markets/:id/resolve', async (req, res) => {
     let source: string;
 
     if (isFuturesMarket(market)) {
-      value = await getIndexValueForMarket(market, indexValue);
-      outcome = Outcome.YES; // Not used for futures settlement
-      source = indexValue != null ? 'manual' : 'mock';
+      const observation = await prisma.oracleObservation.findUnique({
+        where: { marketId: req.params.id },
+      });
+      if (observation) {
+        value = parseFloat(observation.value.toString());
+        outcome = Outcome.YES;
+        source = observation.source;
+      } else if (indexValue != null) {
+        value = indexValue;
+        outcome = Outcome.YES;
+        source = 'manual';
+      } else {
+        value = await getIndexValueForMarket(market, indexValue);
+        outcome = Outcome.YES;
+        source = 'mock';
+      }
     } else {
       const oracleResult = await oracleService.resolveMarket(market);
       outcome = oracleResult.outcome;

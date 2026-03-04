@@ -92,7 +92,8 @@ model Market {
   orders        Order[]
   trades        Trade[]
   positions     Position[]
-  oracleResult  OracleResult?
+  oracleResult     OracleResult?
+  oracleObservation OracleObservation?
 
   @@map("markets")
 }
@@ -203,5 +204,17 @@ model OracleResult {
   market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
 
   @@map("oracle_results")
+}
+
+model OracleObservation {
+  id         String   @id @default(uuid())
+  marketId   String   @unique
+  value      Decimal  @db.Decimal(20, 8)
+  observedAt DateTime
+  source     String // "bom", "aemo", etc.
+
+  market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@map("oracle_observations")
 }
 

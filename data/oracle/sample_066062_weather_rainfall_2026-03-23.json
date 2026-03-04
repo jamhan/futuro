@@ -1,0 +1,8 @@
+{
+  "indexId": "066062_weather_rainfall_2026-03-23",
+  "stationId": "066062",
+  "metric": "rainfall_mm",
+  "value": 12.4,
+  "collected_at": "2026-03-20T00:05:00+11:00",
+  "source": "bom"
+}

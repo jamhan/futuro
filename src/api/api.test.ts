@@ -102,6 +102,33 @@ describe('API', () => {
     });
   });
 
+  describe('POST /api/admin/oracle/import', () => {
+    it('returns 401 without admin key', async () => {
+      const res = await request(app)
+        .post('/api/admin/oracle/import')
+        .set('Content-Type', 'application/json')
+        .send({});
+      expect(res.status).toBe(401);
+      expect(res.body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('returns 200 with valid admin key', async () => {
+      const res = await request(app)
+        .post('/api/admin/oracle/import')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        filesRead: expect.any(Number),
+        observationsCreated: expect.any(Number),
+        observationsUpdated: expect.any(Number),
+        marketsResolved: expect.any(Number),
+        errors: expect.any(Array),
+      });
+    });
+  });
+
   describe('Agent auth: GET /api/accounts/:id', () => {
     it('returns 403 when X-Agent-Key targets different account', async () => {
       const createRes = await request(app)

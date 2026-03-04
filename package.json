@@ -16,8 +16,12 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
     "seed:bom-weekly": "tsx scripts/seed-bom-weekly.ts",
+    "fetch:bom": "tsx scripts/fetch-bom.ts",
+    "fetch:dispatch": "tsx scripts/fetch-dispatch-price.ts",
     "agent-bot": "tsx examples/agent-bot.ts",
-    "verify:agent-beta": "tsx scripts/verify-agent-beta.ts"
+    "verify:agent-beta": "tsx scripts/verify-agent-beta.ts",
+    "check:env": "./scripts/check-no-env-staged.sh",
+    "prepare": "husky"
   },
   "keywords": [
     "exchange",
@@ -31,6 +35,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.7.1",
+    "adm-zip": "^0.5.16",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "decimal.js": "^10.4.3",
@@ -56,6 +61,7 @@
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^10.0.2",
+    "husky": "^9.1.7",
     "jest": "^29.7.0",
     "prisma": "^5.7.1",
     "react": "^18.2.0",

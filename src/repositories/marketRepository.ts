@@ -40,6 +40,14 @@ export class MarketRepository {
     return found ? this.toDomain(found) : null;
   }
 
+  async findByIndexId(indexId: string): Promise<Market | null> {
+    const found = await this.prisma.market.findFirst({
+      where: { indexId },
+    });
+
+    return found ? this.toDomain(found) : null;
+  }
+
   async findAll(): Promise<Market[]> {
     const markets = await this.prisma.market.findMany({
       orderBy: { createdAt: 'desc' },
