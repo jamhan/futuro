@@ -24,6 +24,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
+# OpenSSL for Prisma native engine (libssl.so.1.1)
+RUN apk add --no-cache openssl openssl1.1-compat
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 
