@@ -3,9 +3,9 @@
  * Smoke test for Agent Beta. Requires server running.
  *
  * Run: FUTURO_ADMIN_KEY=secret tsx scripts/verify-agent-beta.ts
- * Or:  FUTURO_URL=http://localhost:3000 FUTURO_ADMIN_KEY=secret tsx scripts/verify-agent-beta.ts
+ * Or:  ORACLEBOOK_URL=https://app.oraclebook.xyz FUTURO_ADMIN_KEY=secret tsx scripts/verify-agent-beta.ts
  */
-const BASE = process.env.FUTURO_URL || 'http://localhost:3000';
+const BASE = process.env.ORACLEBOOK_URL || process.env.FUTURO_URL || 'http://localhost:3000';
 const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY;
 
 async function req(path: string, opts?: RequestInit) {

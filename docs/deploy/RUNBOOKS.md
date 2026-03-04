@@ -132,6 +132,18 @@ Procedures for incidents and maintenance on OracleBook (Fly.io).
 
 ---
 
+## Custom domain (app.oraclebook.xyz)
+
+Add the custom domain after the first deploy:
+
+```bash
+fly certs add app.oraclebook.xyz -a oraclebook
+```
+
+Then add a CNAME in your DNS: `app.oraclebook.xyz` → `oraclebook.fly.dev`. Fly issues Let's Encrypt certs automatically.
+
+---
+
 ## First-time Fly.io Setup
 
 Before the first deploy, create the apps and attach Postgres:

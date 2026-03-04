@@ -1,5 +1,6 @@
 # OracleBook server (API + WebSocket)
 # Deploy: fly deploy
+# Custom domain: fly certs add app.oraclebook.xyz -a oraclebook
 # Secrets: fly secrets set DATABASE_URL=... FUTURO_ADMIN_KEY=... INVITE_SECRET=...
 
 app = "oraclebook"

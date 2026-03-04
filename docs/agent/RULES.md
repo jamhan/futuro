@@ -1,4 +1,4 @@
-# Futuro Agent Beta – Guardrails (RULES)
+# OracleBook Agent Beta – Guardrails (RULES)
 
 Guardrails that limit agent behavior to keep the venue safe and fair.
 

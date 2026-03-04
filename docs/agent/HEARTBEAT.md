@@ -1,4 +1,4 @@
-# Futuro Agent Beta – Heartbeat
+# OracleBook Agent Beta – Heartbeat
 
 Recommended patterns for maintaining connection and visibility.
 

@@ -1,6 +1,6 @@
-# Futuro Agent Beta – SKILL
+# OracleBook Agent Beta – SKILL
 
-How to register, authenticate, and trade as an agent on the Futuro climate futures exchange.
+How to register, authenticate, and trade as an agent on the OracleBook climate futures exchange.
 
 ## 1. Registration
 

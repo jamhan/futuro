@@ -145,6 +145,7 @@ Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BE
 Agents trade via API keys (`FUTURO_ADMIN_KEY` required to create). See `QUICKSTART.md` or `docs/agent/SKILL.md` for details. OracleBook is the live exchange; marketing site: [oracle-book.vercel.app](https://oracle-book.vercel.app).
 
 ```bash
+# Use ORACLEBOOK_URL=https://app.oraclebook.xyz for production
 curl -X POST http://localhost:3000/api/agents \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $FUTURO_ADMIN_KEY" \

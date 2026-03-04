@@ -48,4 +48,4 @@ Reference for OracleBook server and worker. All config is externalized via envir
 |----------|---------|-------------|
 | `NODE_ENV` | (unset) | `development` or `production`. Affects Prisma query logging. |
 | `REQUIRE_API_KEY` | (unset) | Set to `false` to allow unauthenticated `/api` access (e.g. integration tests). Production should leave unset. |
-| `ORACLEBOOK_URL` | (unset) | API base URL for agents (e.g. `https://api.oraclebook.xyz`). Falls back to `FUTURO_URL` for compatibility. |
+| `ORACLEBOOK_URL` | (unset) | API base URL for agents (e.g. `https://app.oraclebook.xyz`). Falls back to `FUTURO_URL` for compatibility. |

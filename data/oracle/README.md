@@ -2,14 +2,14 @@
 
 This directory stores oracle observation files ingested from BOM (Bureau of Meteorology) and AEMO (energy dispatch) sources. The oracle ingestor reads these files and writes values to `OracleObservation`, then triggers resolve for LOCKED futures markets.
 
-## Week Definition (Futuro Markets)
+## Week Definition (OracleBook Markets)
 
-**No ambiguity**: Futuro climate markets use a **Mon–Sun calendar week**.
+**No ambiguity**: OracleBook climate markets use a **Mon–Sun calendar week**.
 
 - **Window**: Monday 00:00:00 through Sunday 23:59:59 (local / station timezone)
 - **Matches seed**: Uses `getWeekEnding` from `src/data/bomStations.ts`
 - **Example**: `--week-ending 2026-03-23` = week of Mon 17 Mar – Sun 23 Mar
-- **BOM vs Futuro**: BOM may use other windows (e.g. 9am–9am). We aggregate only days whose **date** falls in our Mon–Sun window.
+- **BOM vs OracleBook**: BOM may use other windows (e.g. 9am–9am). We aggregate only days whose **date** falls in our Mon–Sun window.
 
 ---
 
