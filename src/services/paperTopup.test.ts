@@ -82,5 +82,61 @@ describe('paperTopup', () => {
       });
       expect(Number(account?.balance)).toBe(10000);
     });
+
+    it('does not touch accounts above threshold', async () => {
+      await prisma.account.update({
+        where: { id: agentAccountId },
+        data: { balance: 5000 },
+      });
+
+      await runPaperTopupJob();
+
+      const account = await prisma.account.findUnique({
+        where: { id: agentAccountId },
+      });
+      expect(Number(account?.balance)).toBe(5000);
+    });
+
+    it('does not touch suspended agent accounts', async () => {
+      const account = await prisma.account.create({
+        data: { balance: 500, isPaper: true },
+      });
+      await prisma.agentProfile.create({
+        data: {
+          name: 'suspended-agent',
+          apiKeyHash: await bcrypt.hash('agent_suspended_key', 10),
+          startingBalance: new Prisma.Decimal(10000),
+          accountId: account.id,
+          status: 'SUSPENDED',
+        },
+      });
+
+      await runPaperTopupJob();
+
+      const updated = await prisma.account.findUnique({
+        where: { id: account.id },
+      });
+      expect(Number(updated?.balance)).toBe(500);
+
+      await prisma.agentProfile.deleteMany({ where: { accountId: account.id } });
+      await prisma.account.delete({ where: { id: account.id } });
+    });
+  });
+
+  describe('resetPaperBalance edge cases', () => {
+    it('does nothing for paper account with no AgentProfile', async () => {
+      const orphanPaper = await prisma.account.create({
+        data: { balance: 100, isPaper: true },
+      });
+
+      await resetPaperBalance(orphanPaper.id);
+
+      const account = await prisma.account.findUnique({
+        where: { id: orphanPaper.id },
+      });
+      expect(Number(account?.balance)).toBe(100);
+
+      await prisma.account.delete({ where: { id: orphanPaper.id } });
+    });
   });
 });
