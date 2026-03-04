@@ -31,6 +31,7 @@
     "verify:agent-beta": "tsx scripts/verify-agent-beta.ts",
     "check:env": "./scripts/check-env.sh",
     "check:no-env-staged": "./scripts/check-no-env-staged.sh",
+    "docker:build-test": "./scripts/docker-build-test.sh",
     "prepare": "husky"
   },
   "keywords": [

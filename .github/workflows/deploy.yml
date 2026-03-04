@@ -54,8 +54,20 @@ jobs:
           REQUIRE_API_KEY: 'false'
         continue-on-error: true  # Skip if TEST_DATABASE_URL not configured
 
-  build-and-deploy:
+  docker-build:
     needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build server image
+        run: docker build -f Dockerfile.server -t oraclebook-server:test .
+
+      - name: Build worker image
+        run: docker build -f Dockerfile.worker -t oraclebook-worker:test .
+
+  build-and-deploy:
+    needs: docker-build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     steps:
