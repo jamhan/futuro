@@ -1,7 +1,11 @@
 # Multi-stage build for OracleBook server
-FROM node:20-alpine AS builder
+# Builder must use Debian so Prisma generates glibc binary (not musl)
+FROM node:20-slim AS builder
 
 WORKDIR /app
+
+# OpenSSL for Prisma at build time
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency manifests
 COPY package.json package-lock.json ./
@@ -16,7 +20,7 @@ COPY src ./src/
 
 RUN npm run build && npx prisma generate
 
-# Production image (Debian slim for Prisma/OpenSSL compatibility)
+# Production image
 FROM node:20-slim AS runner
 
 WORKDIR /app
