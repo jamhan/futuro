@@ -5,6 +5,9 @@ import { MarketRepository } from '../repositories/marketRepository';
 import { OrderRepository } from '../repositories/orderRepository';
 import { TradeRepository } from '../repositories/tradeRepository';
 import { AccountRepository } from '../repositories/accountRepository';
+import { LedgerService } from './ledgerService';
+import { DeploymentService } from './deploymentService';
+import { broadcast } from './wsBroadcast';
 import { MatchingEngine, OrderBook } from '../engine/matching';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 import { matchOrderWithOss } from '../engine/ossMatchingAdapter';
@@ -21,6 +24,8 @@ export class ExchangeService {
   private orderRepo = new OrderRepository();
   private tradeRepo = new TradeRepository();
   private accountRepo = new AccountRepository();
+  private ledgerService = new LedgerService();
+  private deploymentService = new DeploymentService();
   private prisma = getPrismaClient();
 
   /**
@@ -47,6 +52,17 @@ export class ExchangeService {
       throw new Error(`Trading not allowed in market state: ${market.state}`);
     }
 
+    // Price bounds (for limit orders)
+    if (input.type === 'LIMIT' && input.price != null) {
+      const price = input.price;
+      if (market.minPrice != null && price.lt(market.minPrice)) {
+        throw new Error(`Price ${price} below market minimum ${market.minPrice}`);
+      }
+      if (market.maxPrice != null && price.gt(market.maxPrice)) {
+        throw new Error(`Price ${price} above market maximum ${market.maxPrice}`);
+      }
+    }
+
     // Check account balance (for buy orders)
     const account = await this.accountRepo.findById(input.accountId);
     if (!account) {
@@ -63,6 +79,64 @@ export class ExchangeService {
       const cost = price.times(input.quantity);
       if (account.balance.lt(cost)) {
         throw new Error('Insufficient balance');
+      }
+
+      // Agent cash deployment cap: block buys when deployed + cost >= cap
+      const agentProfile = await this.prisma.agentProfile.findUnique({
+        where: { accountId: input.accountId },
+      });
+      if (agentProfile) {
+        const wouldExceed = await this.deploymentService.wouldExceedCap(
+          input.accountId,
+          cost
+        );
+        if (wouldExceed) {
+          throw new Error(
+            `Deployed cash cap exceeded (max $${this.deploymentService.getCap()})`
+          );
+        }
+
+        // Max order size (percentage of equity)
+        const orderSizeCapPct = parseFloat(process.env.ORDER_SIZE_CAP_PCT ?? '10');
+        const maxQty = account.balance.times(orderSizeCapPct / 100).floor();
+        if (input.quantity.gt(maxQty)) {
+          throw new Error(
+            `Order size exceeds ${orderSizeCapPct}% of equity (max ${maxQty})`
+          );
+        }
+
+        // Exposure limit: sum notional in correlation group <= EXPOSURE_CAP_PCT of equity
+        const correlationGroupId = market.correlationGroupId ?? market.id;
+        const orderNotional = price.times(input.quantity);
+        const wouldExceedExposure = await this.deploymentService.wouldExceedExposureCap(
+          input.accountId,
+          correlationGroupId,
+          orderNotional,
+          account.balance
+        );
+        if (wouldExceedExposure) {
+          const exposureCapPct = process.env.EXPOSURE_CAP_PCT ?? '20';
+          throw new Error(
+            `Exposure in correlated group would exceed ${exposureCapPct}% of equity`
+          );
+        }
+
+        // Position limit: max |position| per market <= 5% of equity (in contracts for futures)
+        if (isFuturesMarket(market)) {
+          const positionCapPct = parseFloat(process.env.POSITION_CAP_PCT ?? '5');
+          const maxPosition = account.balance.times(positionCapPct / 100).floor();
+          const currentPos = await this.accountRepo.getPosition(input.accountId, input.marketId);
+          const currentQty = currentPos?.quantity ?? new Decimal(0);
+          const isBuyOrder = input.side === OrderSide.BUY;
+          const postTradeQty = isBuyOrder
+            ? currentQty.plus(input.quantity)
+            : currentQty.minus(input.quantity);
+          if (postTradeQty.abs().gt(maxPosition)) {
+            throw new Error(
+              `Position would exceed ${positionCapPct}% of equity (max ${maxPosition} contracts)`
+            );
+          }
+        }
       }
     }
 
@@ -196,6 +270,20 @@ export class ExchangeService {
       // Update positions and balances inside the same transaction (aggregate per account to avoid lost updates)
       await this.applyTradeSettlements(tx, result.trades);
 
+      // Broadcast trades via WebSocket
+      for (const t of result.trades) {
+        broadcast({
+          type: 'trade',
+          payload: {
+            marketId: t.marketId,
+            tradeId: t.id,
+            price: Number(t.price.toString()),
+            quantity: Number(t.quantity.toString()),
+            buyerSide: t.buyerSide,
+          },
+        });
+      }
+
       return {
         order: savedOrder,
         trades: result.trades,
@@ -205,10 +293,10 @@ export class ExchangeService {
 
   /**
    * Apply position and balance changes from trades. Uses tx so it commits with the order/trade writes.
-   * Aggregates by account so one order that matches multiple counterparties doesn't cause read-modify-write races.
+   * Balance mutations flow through LedgerService; positions updated directly.
    */
   private async applyTradeSettlements(
-    tx: Pick<Parameters<Parameters<ReturnType<typeof getPrismaClient>['$transaction']>[0]>[0], 'account' | 'position'>,
+    tx: Parameters<Parameters<ReturnType<typeof getPrismaClient>['$transaction']>[0]>[0],
     trades: any[]
   ): Promise<void> {
     if (trades.length === 0) return;
@@ -255,14 +343,22 @@ export class ExchangeService {
       }
     }
 
+    // Balance mutations via ledger
+    const journalLines: { accountId: string; debit: Decimal; credit: Decimal }[] = [];
     for (const [accountId, delta] of balanceDeltaByAccount.entries()) {
-      const acc = await tx.account.findUnique({ where: { id: accountId } });
-      if (!acc) continue;
-      const newBalance = new Decimal(acc.balance.toString()).plus(delta);
-      await tx.account.update({
-        where: { id: accountId },
-        data: { balance: new Prisma.Decimal(newBalance.toString()) },
-      });
+      if (delta.gt(0)) {
+        journalLines.push({ accountId, debit: new Decimal(0), credit: delta });
+      } else if (delta.lt(0)) {
+        journalLines.push({ accountId, debit: delta.abs(), credit: new Decimal(0) });
+      }
+    }
+    if (journalLines.length > 0) {
+      const refId = trades.length === 1 ? trades[0].id : undefined;
+      await this.ledgerService.postJournal(
+        journalLines,
+        { description: 'order_fill', refId },
+        tx as any
+      );
     }
 
     for (const [key, delta] of positionDeltaByKey.entries()) {

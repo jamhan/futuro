@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Decimal from 'decimal.js';
 import agentsRouter from './agents';
+import auctionRouter from './auction';
 import { ExchangeService } from '../services/exchangeService';
 import { MarketRepository } from '../repositories/marketRepository';
 import { OrderRepository } from '../repositories/orderRepository';
@@ -9,11 +10,15 @@ import { AccountRepository } from '../repositories/accountRepository';
 import { OracleService } from '../services/oracle';
 import { MockWeatherOracle } from '../services/oracle';
 import { SettlementService } from '../services/settlement';
+import { LedgerService } from '../services/ledgerService';
+import { getLeaderboard } from '../services/leaderboardService';
+import { agentOrdersTotal, agentOrderRejectionsTotal } from '../services/metrics';
 import { getIndexValueForMarket } from '../services/indexProviders';
 import { MarketLifecycle } from '../domain/market';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 import { MarketState, MarketType, OrderSide, OrderType, Outcome } from '../domain/types';
 import { getPrismaClient } from '../db/client';
+import { agentRateLimitMiddleware } from '../middleware/agentRateLimit';
 import { z } from 'zod';
 
 const router = Router();
@@ -26,6 +31,7 @@ const tradeRepo = new TradeRepository();
 const accountRepo = new AccountRepository();
 const oracleService = new OracleService(new MockWeatherOracle());
 const settlementService = new SettlementService();
+const ledgerService = new LedgerService();
 
 // Validation schemas
 const createMarketSchema = z.object({
@@ -53,6 +59,20 @@ const cancelOrderSchema = z.object({
 
 // Agent admin
 router.use('/agents', agentsRouter);
+
+// Auction (valuations, etc.)
+router.use('/auction', auctionRouter);
+
+// Leaderboard
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const entries = await getLeaderboard();
+    res.json(entries);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // Markets
 router.get('/markets', async (req, res) => {
@@ -212,8 +232,10 @@ router.post('/markets/:id/settle', async (req, res) => {
     const positions = await accountRepo.findPositionsByMarket(req.params.id);
     const winningOutcome = (oracle.outcome as Outcome) || Outcome.YES;
     const indexValue = new Decimal(oracle.value.toString());
+    const contractMultiplier =
+      market.contractMultiplier != null ? market.contractMultiplier : new Decimal(1);
     const options = isFuturesMarket(market)
-      ? { marketType: MarketType.FUTURES, indexValue }
+      ? { marketType: MarketType.FUTURES, indexValue, contractMultiplier }
       : undefined;
 
     const settlements = settlementService.calculateSettlements(
@@ -222,14 +244,28 @@ router.post('/markets/:id/settle', async (req, res) => {
       options
     );
 
-    const balances = new Map<string, Decimal>();
-    for (const p of positions) {
-      const acc = await accountRepo.findById(p.accountId);
-      if (acc) balances.set(p.accountId, acc.balance);
+    const journalLines = [];
+    for (const [accountId, payout] of settlements) {
+      const p = new Decimal(payout.toString());
+      if (p.gt(0)) {
+        journalLines.push({
+          accountId,
+          debit: new Decimal(0),
+          credit: p,
+        });
+      } else if (p.lt(0)) {
+        journalLines.push({
+          accountId,
+          debit: p.abs(),
+          credit: new Decimal(0),
+        });
+      }
     }
-    const newBalances = settlementService.applySettlements(settlements, balances);
-    for (const [accountId, balance] of newBalances) {
-      await accountRepo.updateBalance(accountId, balance);
+    if (journalLines.length > 0) {
+      await ledgerService.postJournal(
+        journalLines,
+        { description: 'settlement', refId: req.params.id }
+      );
     }
 
     const updated = await marketRepo.updateState(req.params.id, MarketState.SETTLED, {
@@ -272,7 +308,7 @@ router.get('/markets/:marketId/orders', async (req, res) => {
   }
 });
 
-router.post('/orders', async (req, res) => {
+router.post('/orders', agentRateLimitMiddleware, async (req, res) => {
   try {
     const data = placeOrderSchema.parse(req.body);
     const effectiveAccountId = req.accountId ?? data.accountId;
@@ -290,8 +326,15 @@ router.post('/orders', async (req, res) => {
       price: data.price !== null && data.price !== undefined ? new Decimal(data.price) : null,
       quantity: new Decimal(data.quantity),
     });
+    if (req.agent) {
+      agentOrdersTotal.inc({ agent_id: req.agent.id });
+    }
     res.status(201).json(result);
   } catch (error: any) {
+    if (req.agent) {
+      const reason = error.message?.slice(0, 50) ?? 'unknown';
+      agentOrderRejectionsTotal.inc({ reason });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors });
     }

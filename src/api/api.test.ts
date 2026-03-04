@@ -9,11 +9,21 @@ const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY || 'test-admin-key';
 const prisma = getPrismaClient();
 
 describe('API', () => {
+  jest.setTimeout(15000);
   describe('GET /health', () => {
     it('returns 200 and status ok', async () => {
       const res = await request(app).get('/health');
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ status: 'ok' });
+    });
+  });
+
+  describe('GET /metrics', () => {
+    it('returns 200 and Prometheus metrics', async () => {
+      const res = await request(app).get('/metrics');
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('agent_orders_total');
+      expect(res.text).toContain('ledger_journals_total');
     });
   });
 

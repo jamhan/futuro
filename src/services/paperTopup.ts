@@ -1,10 +1,12 @@
 import Decimal from 'decimal.js';
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../db/client';
-import { AccountRepository } from '../repositories/accountRepository';
+import { LedgerService } from './ledgerService';
+import { ensureSystemAccount, SYSTEM_PAPER_ACCOUNT_ID } from './systemAccount';
+import { agentLiquidationsTotal } from './metrics';
 
 const prisma = getPrismaClient();
-const accountRepo = new AccountRepository();
+const ledgerService = new LedgerService();
 
 const TOPUP_THRESHOLD = parseFloat(process.env.AGENT_TOPUP_THRESHOLD ?? '2000');
 
@@ -18,8 +20,32 @@ export async function resetPaperBalance(accountId: string): Promise<void> {
     return;
   }
 
+  const currentBalance = new Decimal(profile.account.balance.toString());
   const startingBalance = new Decimal(profile.startingBalance.toString());
-  await accountRepo.updateBalance(accountId, startingBalance);
+  const delta = startingBalance.minus(currentBalance);
+
+  if (delta.isZero()) {
+    return;
+  }
+
+  await ensureSystemAccount();
+
+  const lines = delta.gt(0)
+    ? [
+        { accountId: SYSTEM_PAPER_ACCOUNT_ID, debit: delta, credit: new Decimal(0) },
+        { accountId, debit: new Decimal(0), credit: delta },
+      ]
+    : [
+        { accountId, debit: delta.abs(), credit: new Decimal(0) },
+        { accountId: SYSTEM_PAPER_ACCOUNT_ID, debit: new Decimal(0), credit: delta.abs() },
+      ];
+
+  await ledgerService.postJournal(lines, {
+    description: 'paper_topup',
+    refId: profile.id,
+  });
+
+  agentLiquidationsTotal.inc({ agent_id: profile.id });
 
   console.log(
     `[paperTopup] Reset account ${accountId} (agent: ${profile.name}) to balance ${profile.startingBalance}`

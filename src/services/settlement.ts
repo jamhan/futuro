@@ -20,11 +20,15 @@ export class SettlementService {
   }
 
   /**
-   * Futures: payout = quantity * indexValue (long gets credited, short debited)
+   * Futures: payout = quantity * indexValue * contractMultiplier (long credited, short debited)
    */
-  calculateFuturesPayout(position: Position, indexValue: Decimal): Decimal {
+  calculateFuturesPayout(
+    position: Position,
+    indexValue: Decimal,
+    contractMultiplier: Decimal = new Decimal(1)
+  ): Decimal {
     const qty = position.quantity ?? new Decimal(0);
-    return qty.times(indexValue);
+    return qty.times(indexValue).times(contractMultiplier);
   }
 
   /**
@@ -33,10 +37,15 @@ export class SettlementService {
   calculatePayout(
     position: Position,
     winningOutcome: Outcome,
-    options?: { marketType?: MarketType; indexValue?: Decimal }
+    options?: {
+      marketType?: MarketType;
+      indexValue?: Decimal;
+      contractMultiplier?: Decimal;
+    }
   ): Decimal {
     if (options?.marketType === MarketType.FUTURES && options?.indexValue != null) {
-      return this.calculateFuturesPayout(position, options.indexValue);
+      const mult = options.contractMultiplier ?? new Decimal(1);
+      return this.calculateFuturesPayout(position, options.indexValue, mult);
     }
     return this.calculateBinaryPayout(position, winningOutcome);
   }
@@ -47,7 +56,11 @@ export class SettlementService {
   calculateSettlements(
     positions: Position[],
     winningOutcome: Outcome,
-    options?: { marketType?: MarketType; indexValue?: Decimal }
+    options?: {
+      marketType?: MarketType;
+      indexValue?: Decimal;
+      contractMultiplier?: Decimal;
+    }
   ): Map<AccountId, Decimal> {
     const settlements = new Map<AccountId, Decimal>();
     for (const position of positions) {
@@ -88,7 +101,11 @@ export class SettlementService {
     positions: Position[],
     balances: Map<AccountId, Decimal>,
     winningOutcome: Outcome,
-    options?: { marketType?: MarketType; indexValue?: Decimal }
+    options?: {
+      marketType?: MarketType;
+      indexValue?: Decimal;
+      contractMultiplier?: Decimal;
+    }
   ): { isValid: boolean; totalValue: Decimal; totalCash: Decimal } {
     const totalPayout = positions.reduce(
       (sum, pos) => sum.plus(this.calculatePayout(pos, winningOutcome, options)),

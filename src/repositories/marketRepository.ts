@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { getPrismaClient } from '../db/client';
 import { Market, MarketId } from '../domain/market';
 import { MarketState, Outcome, MarketType } from '../domain/types';
@@ -18,6 +19,10 @@ export class MarketRepository {
         marketType: market.marketType ?? MarketType.BINARY,
         indexType: market.indexType ?? null,
         indexId: market.indexId ?? null,
+        minPrice: market.minPrice != null ? new Prisma.Decimal(market.minPrice.toString()) : null,
+        maxPrice: market.maxPrice != null ? new Prisma.Decimal(market.maxPrice.toString()) : null,
+        correlationGroupId: market.correlationGroupId ?? null,
+        contractMultiplier: market.contractMultiplier != null ? new Prisma.Decimal(market.contractMultiplier.toString()) : null,
         lockedAt: market.lockedAt,
         resolvedAt: market.resolvedAt,
         settledAt: market.settledAt,
@@ -75,6 +80,10 @@ export class MarketRepository {
     marketType: string;
     indexType: string | null;
     indexId: string | null;
+    minPrice?: unknown;
+    maxPrice?: unknown;
+    correlationGroupId?: string | null;
+    contractMultiplier?: unknown;
     createdAt: Date;
     lockedAt: Date | null;
     resolvedAt: Date | null;
@@ -91,6 +100,10 @@ export class MarketRepository {
       marketType: (dbMarket.marketType as MarketType) || MarketType.BINARY,
       indexType: dbMarket.indexType,
       indexId: dbMarket.indexId,
+      minPrice: dbMarket.minPrice != null ? new Decimal(dbMarket.minPrice.toString()) : null,
+      maxPrice: dbMarket.maxPrice != null ? new Decimal(dbMarket.maxPrice.toString()) : null,
+      correlationGroupId: dbMarket.correlationGroupId ?? null,
+      contractMultiplier: dbMarket.contractMultiplier != null ? new Decimal(dbMarket.contractMultiplier.toString()) : null,
       createdAt: dbMarket.createdAt,
       lockedAt: dbMarket.lockedAt,
       resolvedAt: dbMarket.resolvedAt,

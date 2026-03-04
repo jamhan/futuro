@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { MarketState, Outcome, MarketId, MarketType } from './types';
 
 export type { MarketId };
@@ -17,6 +18,10 @@ export interface Market {
   marketType?: MarketType;
   indexType?: string | null;
   indexId?: string | null;
+  minPrice?: Decimal | null;
+  maxPrice?: Decimal | null;
+  correlationGroupId?: string | null;
+  contractMultiplier?: Decimal | null;
   createdAt: Date;
   lockedAt: Date | null;
   resolvedAt: Date | null;

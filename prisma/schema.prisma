@@ -22,13 +22,37 @@ model Account {
   isPaper   Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  orders       Order[]
-  positions    Position[]
-  tradesAsBuyer Trade[]  @relation("BuyerTrades")
-  tradesAsSeller Trade[] @relation("SellerTrades")
-  agentProfile AgentProfile?
+  orders         Order[]
+  positions      Position[]
+  tradesAsBuyer  Trade[]       @relation("BuyerTrades")
+  tradesAsSeller Trade[]       @relation("SellerTrades")
+  agentProfile   AgentProfile?
+  journalLines   JournalLine[]
 
   @@map("accounts")
+}
+
+model Journal {
+  id          String   @id @default(uuid())
+  description String   // e.g. "order_fill", "settlement", "paper_topup"
+  refId       String?  // orderId, marketId, etc.
+  createdAt   DateTime @default(now())
+  lines       JournalLine[]
+
+  @@map("journals")
+}
+
+model JournalLine {
+  id        String   @id @default(uuid())
+  journalId String
+  accountId String
+  debit     Decimal  @default(0) @db.Decimal(20, 8)
+  credit    Decimal  @default(0) @db.Decimal(20, 8)
+
+  journal Journal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("journal_lines")
 }
 
 model AgentProfile {
@@ -56,7 +80,11 @@ model Market {
   marketType     String      @default("BINARY") // BINARY | FUTURES
   indexType      String?    // e.g. weather_rainfall | solar_ghi (for FUTURES)
   indexId        String?    // e.g. station id, region slug (for FUTURES)
-  createdAt      DateTime    @default(now())
+  minPrice       Decimal?   @db.Decimal(20, 8) // Price floor (null = no bound)
+  maxPrice          Decimal?   @db.Decimal(20, 8) // Price ceiling (null = no bound)
+  correlationGroupId String?   // Markets in same group = correlated for exposure
+  contractMultiplier Decimal?  @default(1) @db.Decimal(20, 8) // Payout = qty * indexValue * multiplier
+  createdAt         DateTime    @default(now())
   lockedAt       DateTime?
   resolvedAt     DateTime?
   settledAt      DateTime?
@@ -131,6 +159,36 @@ model Position {
   @@unique([accountId, marketId])
   @@index([marketId])
   @@map("positions")
+}
+
+model ValuationSubmission {
+  id          String   @id @default(uuid())
+  agentId     String
+  marketId    String
+  intervalId  String   // e.g. YYYY-MM-DDTHH (hour bucket)
+  fairValue   Decimal  @db.Decimal(20, 8)
+  lowerBand   Decimal  @db.Decimal(20, 8)
+  upperBand   Decimal  @db.Decimal(20, 8)
+  submittedAt DateTime @default(now())
+
+  @@unique([agentId, marketId, intervalId])
+  @@index([intervalId])
+  @@index([marketId])
+  @@map("valuation_submissions")
+}
+
+model AuctionResult {
+  id             String   @id @default(uuid())
+  intervalId     String
+  marketId       String
+  clearingPrice  Decimal  @db.Decimal(20, 8)
+  volume         Decimal  @db.Decimal(20, 8)
+  imbalance     Decimal  @db.Decimal(20, 8) // buy - sell volume
+  createdAt      DateTime @default(now())
+
+  @@unique([intervalId, marketId])
+  @@index([intervalId])
+  @@map("auction_results")
 }
 
 model OracleResult {
