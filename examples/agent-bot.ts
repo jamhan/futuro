@@ -29,7 +29,10 @@ async function main() {
   }
 
   const market = openMarkets[0];
-  console.log(`Using market: ${market.id} (${market.description})`);
+  const isFutures = market.marketType === 'FUTURES';
+  const side = isFutures ? 'BUY' : 'BUY_YES';
+  const price = isFutures ? 25 : 0.5; // Index units (e.g. mm) vs binary 0–1
+  console.log(`Using market: ${market.id} (${market.description}) [${market.marketType}]`);
 
   // 2. Fetch order book
   const ordersRes = await fetch(`${BASE_URL}/api/markets/${market.id}/orders`);
@@ -42,9 +45,9 @@ async function main() {
     headers,
     body: JSON.stringify({
       marketId: market.id,
-      side: 'BUY_YES',
+      side,
       type: 'LIMIT',
-      price: 0.5,
+      price,
       quantity: 5,
     }),
   });
