@@ -88,3 +88,34 @@ function matchesInterval(settlementDate: string, target: string): boolean {
   const targetNorm = target.replace(/\+.*$/, '').slice(0, 16);
   return sdNorm === targetNorm || sdNorm.startsWith(targetNorm);
 }
+
+/**
+ * Extract daily average RRP for a region and date.
+ * Averages all 288 five-minute RRP values for that calendar day (NEM market time).
+ * dateTarget: "YYYY-MM-DD" or ISO string; we match rows whose SETTLEMENTDATE falls on that day.
+ */
+export function extractDailyAverageRRP(
+  rows: DispatchRow[],
+  regionId: string,
+  dateTarget: string
+): number | null {
+  const dateStr = dateTarget.slice(0, 10).replace(/-/g, '');
+  const sum = { total: 0, count: 0 };
+  for (const row of rows) {
+    if (row.REGIONID !== regionId) continue;
+    const sd = row.SETTLEMENTDATE;
+    if (!sd) continue;
+    const rowDate = sd.replace(/\//g, '-').slice(0, 10).replace(/-/g, '');
+    if (rowDate !== dateStr) continue;
+
+    const rrp = row.RRP;
+    if (rrp == null || rrp === '' || rrp === '-') continue;
+    const n = typeof rrp === 'number' ? rrp : parseFloat(String(rrp));
+    if (!Number.isNaN(n)) {
+      sum.total += n;
+      sum.count++;
+    }
+  }
+  if (sum.count === 0) return null;
+  return sum.total / sum.count;
+}

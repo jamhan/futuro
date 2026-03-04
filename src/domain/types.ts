@@ -50,6 +50,8 @@ export enum IndexType {
   SOLAR_EXPOSURE = 'solar_exposure',
   /** Legacy */
   SOLAR_GHI = 'solar_ghi',
+  /** AEMO NEM daily average RRP ($/MWh) per region */
+  DISPATCH_DAILY_RRP = 'dispatch_daily_rrp',
 }
 
 /**

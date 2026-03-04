@@ -156,6 +156,14 @@ async function placeOrder(orderData) {
   }
 }
 
+// Energy vs Weather: index types per category
+const ENERGY_INDEX_TYPES = ['solar_exposure', 'solar_ghi', 'dispatch_daily_rrp'];
+const WEATHER_INDEX_TYPES = ['weather_rainfall', 'temperature_high', 'temperature_low', 'wind_gust_max'];
+
+function getCategory(indexType) {
+  return ENERGY_INDEX_TYPES.includes(indexType || '') ? 'energy' : 'weather';
+}
+
 // Tab labels for climate index types
 const INDEX_TYPE_LABELS = {
   weather_rainfall: 'Rainfall (mm)',
@@ -164,6 +172,7 @@ const INDEX_TYPE_LABELS = {
   wind_gust_max: 'Max wind gust (km/h)',
   solar_exposure: 'Solar exposure (MJ/m²)',
   solar_ghi: 'Solar GHI',
+  dispatch_daily_rrp: 'Daily avg RRP ($/MWh)',
 };
 
 // Price unit for order form (futures: price in index units)
@@ -174,82 +183,143 @@ const INDEX_TYPE_UNITS = {
   wind_gust_max: 'km/h',
   solar_exposure: 'MJ/m²',
   solar_ghi: 'kWh/m²',
+  dispatch_daily_rrp: '$/MWh',
 };
 
-function groupMarketsByTypeAndStation(markets) {
-  const byType = {};
+function groupMarketsByCategoryTypeAndStation(markets) {
+  const result = { energy: {}, weather: {} };
   for (const m of markets) {
+    const cat = getCategory(m.indexType);
     const type = m.indexType || 'other';
-    if (!byType[type]) byType[type] = {};
     const loc = m.location || 'Unknown';
-    if (!byType[type][loc]) byType[type][loc] = [];
-    byType[type][loc].push(m);
+    if (!result[cat][type]) result[cat][type] = {};
+    if (!result[cat][type][loc]) result[cat][type][loc] = [];
+    result[cat][type][loc].push(m);
   }
-  // Sort markets by eventDate within each station
-  for (const type of Object.keys(byType)) {
-    for (const loc of Object.keys(byType[type])) {
-      byType[type][loc].sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate));
+  for (const cat of ['energy', 'weather']) {
+    for (const type of Object.keys(result[cat])) {
+      for (const loc of Object.keys(result[cat][type])) {
+        result[cat][type][loc].sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate));
+      }
     }
   }
-  return byType;
+  return result;
+}
+
+function renderStationGrid(stations) {
+  const locations = Object.keys(stations).sort();
+  if (locations.length === 0) return '';
+  return `
+    <div class="station-grid">
+      ${locations.map(loc => {
+        const list = stations[loc];
+        return `
+          <div class="station-box">
+            <h4>${loc}</h4>
+            <div class="station-links">
+              ${list.map(m => {
+                const dateStr = m.eventDate ? new Date(m.eventDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                const label = m.indexType === 'dispatch_daily_rrp' ? dateStr : `Week ending ${dateStr}`;
+                return `<a href="?market=${m.id}">${label}</a>`;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
 }
 
 function renderMarketPicker(markets) {
-  const byType = groupMarketsByTypeAndStation(markets);
-  const types = Object.keys(INDEX_TYPE_LABELS).filter(t => byType[t]);
-  if (types.length === 0) {
-    types.push(...Object.keys(byType));
-  }
-  const firstType = types[0];
+  const byCategory = groupMarketsByCategoryTypeAndStation(markets);
+  const energyTypes = ENERGY_INDEX_TYPES.filter(t => byCategory.energy[t] && Object.keys(byCategory.energy[t]).length > 0);
+  const weatherTypes = WEATHER_INDEX_TYPES.filter(t => byCategory.weather[t] && Object.keys(byCategory.weather[t]).length > 0);
+  const otherEnergy = Object.keys(byCategory.energy).filter(t => !ENERGY_INDEX_TYPES.includes(t));
+  const otherWeather = Object.keys(byCategory.weather).filter(t => !WEATHER_INDEX_TYPES.includes(t));
+
+  const allEnergyTypes = energyTypes.length > 0 ? energyTypes : otherEnergy;
+  const allWeatherTypes = weatherTypes.length > 0 ? weatherTypes : otherWeather;
+
+  const firstCategory = allEnergyTypes.length > 0 ? 'energy' : 'weather';
+  const firstEnergyType = allEnergyTypes[0] || null;
+  const firstWeatherType = allWeatherTypes[0] || null;
 
   let html = `
     <div class="market-info picker-header">
       <h2>Select a market</h2>
-      <p style="margin-bottom: 0; color: #666;">Choose by type, then station and week.</p>
+      <p style="margin-bottom: 0; color: #666;">Choose by category, type, then station and week.</p>
     </div>
-    <div class="picker-tabs">
-      ${types.map((type, i) => `
-        <button type="button" class="picker-tab ${type === firstType ? 'active' : ''}" data-type="${type}">
-          ${INDEX_TYPE_LABELS[type] || type}
+    <div class="picker-category-tabs">
+      ${allEnergyTypes.length > 0 ? `
+        <button type="button" class="picker-tab picker-category-tab tab-energy ${firstCategory === 'energy' ? 'active' : ''}" data-category="energy">
+          Energy
         </button>
-      `).join('')}
+      ` : ''}
+      ${allWeatherTypes.length > 0 ? `
+        <button type="button" class="picker-tab picker-category-tab tab-weather ${firstCategory === 'weather' ? 'active' : ''}" data-category="weather">
+          Weather
+        </button>
+      ` : ''}
     </div>
   `;
-  for (const type of types) {
-    const stations = byType[type] || {};
-    const locations = Object.keys(stations).sort();
-    html += `
-      <div class="picker-panel ${type === firstType ? 'active' : ''}" data-panel="${type}">
-        <div class="station-grid">
-          ${locations.map(loc => {
-            const list = stations[loc];
-            return `
-              <div class="station-box">
-                <h4>${loc}</h4>
-                <div class="station-links">
-                  ${list.map(m => {
-                    const weekEnd = m.eventDate ? new Date(m.eventDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-                    return `<a href="?market=${m.id}">Week ending ${weekEnd}</a>`;
-                  }).join('')}
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
+
+  if (allEnergyTypes.length > 0) {
+    html += `<div class="picker-panel picker-panel-category picker-panel-category-energy ${firstCategory === 'energy' ? 'active' : ''}" data-panel-category="energy">`;
+    html += `<div class="picker-sub-tabs">`;
+    for (const type of allEnergyTypes) {
+      html += `<button type="button" class="picker-tab picker-type-tab ${type === firstEnergyType ? 'active' : ''}" data-category="energy" data-type="${type}">${INDEX_TYPE_LABELS[type] || type}</button>`;
+    }
+    html += `</div>`;
+    for (const type of allEnergyTypes) {
+      const stations = byCategory.energy[type] || {};
+      html += `<div class="picker-type-panel ${type === firstEnergyType ? 'active' : ''}" data-panel-category="energy" data-panel-type="${type}">${renderStationGrid(stations)}</div>`;
+    }
+    html += `</div>`;
   }
+
+  if (allWeatherTypes.length > 0) {
+    html += `<div class="picker-panel picker-panel-category picker-panel-category-weather ${firstCategory === 'weather' ? 'active' : ''}" data-panel-category="weather">`;
+    html += `<div class="picker-sub-tabs">`;
+    for (const type of allWeatherTypes) {
+      html += `<button type="button" class="picker-tab picker-type-tab ${type === firstWeatherType ? 'active' : ''}" data-category="weather" data-type="${type}">${INDEX_TYPE_LABELS[type] || type}</button>`;
+    }
+    html += `</div>`;
+    for (const type of allWeatherTypes) {
+      const stations = byCategory.weather[type] || {};
+      html += `<div class="picker-type-panel ${type === firstWeatherType ? 'active' : ''}" data-panel-category="weather" data-panel-type="${type}">${renderStationGrid(stations)}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (allEnergyTypes.length === 0 && allWeatherTypes.length === 0) {
+    html += `<div class="picker-panel active"><p>No markets available.</p></div>`;
+  }
+
   return html;
 }
 
 function attachPickerListeners() {
-  document.querySelectorAll('.picker-tab').forEach(btn => {
+  document.querySelectorAll('.picker-category-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      const type = btn.getAttribute('data-type');
-      document.querySelectorAll('.picker-tab').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.picker-panel').forEach(p => p.classList.remove('active'));
+      const category = btn.getAttribute('data-category');
+      document.querySelectorAll('.picker-category-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.picker-panel-category').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      const panel = document.querySelector(`.picker-panel[data-panel="${type}"]`);
+      const panel = document.querySelector(`.picker-panel-category[data-panel-category="${category}"]`);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.picker-type-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const category = btn.getAttribute('data-category');
+      const type = btn.getAttribute('data-type');
+      const parent = btn.closest('.picker-panel-category');
+      if (!parent) return;
+      parent.querySelectorAll('.picker-type-tab').forEach(b => b.classList.remove('active'));
+      parent.querySelectorAll('.picker-type-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = parent.querySelector(`.picker-type-panel[data-panel-type="${type}"]`);
       if (panel) panel.classList.add('active');
     });
   });
@@ -304,9 +374,10 @@ function renderApp() {
   if (!state.accountId) {
     root.innerHTML = `
       <div class="place-order">
+        <a href="?" class="back-link">&larr; All markets</a>
         <h3>Create Account</h3>
-        <p>You need an account to trade. Starting balance: 1000</p>
-        <button onclick="createAccount()">Create Account</button>
+        <p class="form-description">You need an account to trade. Starting balance: $1,000</p>
+        <button type="button" onclick="createAccount()">Create Account</button>
       </div>
     `;
     return;
@@ -319,24 +390,30 @@ function renderApp() {
   const remaining = (o) => Number(o.quantity || 0) - Number(o.filledQuantity || 0);
   const priceNum = (o) => (o.price != null ? Number(o.price) : null);
 
+  const eventDateStr = new Date(state.market.eventDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   root.innerHTML = `
-    <div class="market-info">
-      <h2>${state.market.description}</h2>
-      <p>Location: ${state.market.location}</p>
-      <p>Event Date: ${new Date(state.market.eventDate).toLocaleDateString()}</p>
-      <p>State: ${state.market.state}</p>
-      ${state.account ? `<p>Balance: ${state.account.balance}</p>` : ''}
+    <div class="market-detail-header">
+      <a href="?" class="back-link">&larr; All markets</a>
+      <div class="market-detail-meta">
+        <h2 class="market-detail-title">${state.market.description}</h2>
+        <div class="market-detail-grid">
+          <span class="market-detail-item"><strong>Location</strong> ${state.market.location}</span>
+          <span class="market-detail-item"><strong>Event</strong> ${eventDateStr}</span>
+          <span class="market-detail-item"><strong>State</strong> ${state.market.state}</span>
+          ${state.account ? `<span class="market-detail-item market-detail-balance"><strong>Balance</strong> $${state.account.balance}</span>` : ''}
+        </div>
+      </div>
     </div>
     
     <div class="order-book">
-      <div class="order-side">
+      <div class="order-side bids">
         <h3>Bids (Buy)</h3>
         <div class="order-row header">
           <div>${priceLabel}</div>
           <div>Remaining</div>
           <div>Filled</div>
         </div>
-        ${bids.filter(o => remaining(o) > 0).map(o => `
+        ${bids.filter(o => remaining(o) > 0).length === 0 ? '<div class="order-row order-empty">No bids</div>' : bids.filter(o => remaining(o) > 0).map(o => `
           <div class="order-row">
             <div>${priceNum(o) != null ? priceNum(o) : 'MARKET'}</div>
             <div>${remaining(o)}</div>
@@ -344,14 +421,14 @@ function renderApp() {
           </div>
         `).join('')}
       </div>
-      <div class="order-side">
+      <div class="order-side asks">
         <h3>Asks (Sell)</h3>
         <div class="order-row header">
           <div>${priceLabel}</div>
           <div>Remaining</div>
           <div>Filled</div>
         </div>
-        ${asks.filter(o => remaining(o) > 0).map(o => `
+        ${asks.filter(o => remaining(o) > 0).length === 0 ? '<div class="order-row order-empty">No asks</div>' : asks.filter(o => remaining(o) > 0).map(o => `
           <div class="order-row">
             <div>${priceNum(o) != null ? priceNum(o) : 'MARKET'}</div>
             <div>${remaining(o)}</div>
@@ -386,20 +463,20 @@ function renderApp() {
           <label>Quantity</label>
           <input type="number" id="order-quantity" step="0.1" min="0.1" required>
         </div>
-        <button type="submit">Place Order</button>
+        <button type="submit" class="btn-primary">Place Order</button>
       </form>
       ${state.error ? `<div class="error">${state.error}</div>` : ''}
     </div>
     
     <div class="trades">
       <h3>Recent Trades</h3>
-      <div class="trade-row" style="font-weight: bold; background: #f9f9f9;">
+      <div class="trade-row trade-row-header">
         <div>${priceLabel}</div>
         <div>Quantity</div>
         <div>Side</div>
         <div>Time</div>
       </div>
-      ${state.trades.slice(0, 20).map(t => {
+      ${state.trades.length === 0 ? '<div class="trade-row trade-empty"><span>No trades yet</span></div>' : state.trades.slice(0, 20).map(t => {
         const sideDisplay = (t.buyerSide === 'BUY' || t.buyerSide === 'BUY_YES') ? 'Buy' : 'Sell';
         return `
         <div class="trade-row">

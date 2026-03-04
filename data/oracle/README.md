@@ -84,9 +84,7 @@ BOM provides daily data. For weekly markets we aggregate:
 
 NSW1, QLD1, VIC1, SA1, TAS1
 
-### Fetch Script
-
-Zip URL from: https://www.nemweb.com.au/Reports/Current/Dispatch_Reports/
+### 5-Minute RRP (single interval)
 
 ```bash
 npx tsx scripts/fetch-dispatch-price.ts \
@@ -96,9 +94,29 @@ npx tsx scripts/fetch-dispatch-price.ts \
   --market-id NSW_CAP_20260304_1800
 ```
 
+### Daily Average RRP (agents can bet on this)
+
+Creates one oracle file per region with the arithmetic mean of 288 five-minute RRPs for the day. Agents trade via `X-Agent-Key` on markets seeded with `npm run seed:aemo-daily-rrp`.
+
+```bash
+# 1. Seed markets (additive - does not clear BOM markets)
+npm run seed:aemo-daily-rrp
+
+# 2. Fetch daily average (provide zip(s) covering the full day from Dispatch_Reports or Archive)
+npx tsx scripts/fetch-daily-rrp.ts \
+  --zip-url "https://..." \
+  --date 2026-03-20
+
+# 3. Lock the market(s) before/after event date, then oracle import
+curl -X POST http://localhost:3000/api/admin/oracle/import \
+  -H "Authorization: Bearer $FUTURO_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
 ### SETTLEMENTDATE Format
 
-AEMO uses `YYYY/MM/DD HH:MM:00` in NEM market time (AEDT/AEST). Dispatch intervals are 5 minutes. Match your `--interval` to the desired 5-min slot.
+AEMO uses `YYYY/MM/DD HH:MM:00` in NEM market time (AEDT/AEST). Dispatch intervals are 5 minutes.
 
 ---
 
