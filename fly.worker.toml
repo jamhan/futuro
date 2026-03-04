@@ -1,0 +1,27 @@
+# Futuro Exchange worker (cron jobs: paper topup, auction, oracle ingestion)
+# Deploy: fly deploy -c fly.worker.toml
+# Create app: fly apps create futuro-worker (or use -a futuro-worker)
+# Secrets: same as server (DATABASE_URL, FUTURO_ADMIN_KEY, etc.)
+
+app = "futuro-worker"
+
+[build]
+  dockerfile = "Dockerfile.worker"
+
+[env]
+  NODE_ENV = "production"
+  WORKER_PORT = "8081"
+
+[http_service]
+  internal_port = 8081
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "2s"

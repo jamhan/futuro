@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Validate required environment variables for server and worker.
 # Run before deploy or in CI to catch missing config.
+# See docs/deploy/ENV.md for full reference.
 
 set -e
 missing=0
@@ -12,20 +13,23 @@ check() {
   fi
 }
 
+warn() {
+  if [[ -z "${!1}" ]]; then
+    echo "WARN: $1 is not set ($2)"
+  fi
+}
+
 # Required for both server and worker
 check DATABASE_URL
 
-# Server
-check PORT
+# Server: PORT has default 3000 in code; often set by platform (e.g. Fly PORT=8080)
+warn PORT "server defaults to 3000; set explicitly for production"
 
-# Worker (optional PORT override; defaults to 3001)
-# WORKER_PORT, AGENT_TOPUP_THRESHOLD, AUCTION_CRON, ORACLE_INGESTION_CRON have defaults
-
-# Agent beta (optional)
-# FUTURO_ADMIN_KEY - optional for basic server; required for agent creation
+# Agent beta: warn if admin key missing when deploying
+warn FUTURO_ADMIN_KEY "required for agent creation via POST /api/agents"
 
 if [[ $missing -eq 1 ]]; then
-  echo "Run with required env vars. See .env.example and DEPLOY.md"
+  echo "Run with required env vars. See .env.example and docs/deploy/ENV.md"
   exit 1
 fi
 

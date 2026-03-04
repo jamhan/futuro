@@ -5,9 +5,11 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import routes from './api/routes';
 import { agentAuthMiddleware } from './middleware/agentAuth';
+import { requireApiKeyMiddleware } from './middleware/requireApiKey';
 import { metricsMiddleware } from './middleware/metricsMiddleware';
 import { registerWsClient } from './services/wsBroadcast';
 import { getMetrics, getContentType } from './services/metrics';
+import { getPrismaClient } from './db/client';
 
 // Cron jobs run in src/worker.ts (separate process)
 
@@ -29,10 +31,26 @@ if (INVITE_SECRET) {
   });
 }
 app.use('/api', agentAuthMiddleware);
+app.use('/api', requireApiKeyMiddleware);
 app.use('/api', routes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+/** Liveness: process is alive (no DB check). */
+app.get('/healthz', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+/** Readiness: DB is reachable. Returns 503 if DB unavailable. */
+app.get('/readyz', async (req, res) => {
+  try {
+    await getPrismaClient().$queryRaw`SELECT 1`;
+    res.json({ status: 'ok' });
+  } catch (err) {
+    res.status(503).json({ status: 'unhealthy', error: 'Database unreachable' });
+  }
 });
 
 app.get('/metrics', async (req, res) => {

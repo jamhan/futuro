@@ -1,0 +1,53 @@
+# Local development stack for Futuro Exchange
+# Usage: cp .env.example .env && docker compose up --build
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: futuro
+      POSTGRES_PASSWORD: futuro
+      POSTGRES_DB: futuro_exchange
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U futuro -d futuro_exchange"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "3000:8080"
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DATABASE_URL: postgresql://futuro:futuro@postgres:5432/futuro_exchange?schema=public
+      WORKER_PORT: 8081
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      NODE_ENV: production
+      WORKER_PORT: 8081
+      DATABASE_URL: postgresql://futuro:futuro@postgres:5432/futuro_exchange?schema=public
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data: {}

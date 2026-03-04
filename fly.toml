@@ -1,0 +1,26 @@
+# Futuro Exchange server (API + WebSocket)
+# Deploy: fly deploy
+# Secrets: fly secrets set DATABASE_URL=... FUTURO_ADMIN_KEY=... INVITE_SECRET=...
+
+app = "futuro"
+
+[build]
+  dockerfile = "Dockerfile.server"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "2s"

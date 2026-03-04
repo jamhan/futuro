@@ -1,0 +1,25 @@
+# Dependencies and build artifacts
+node_modules
+dist
+.git
+
+# Test and dev
+*.test.ts
+*.spec.ts
+tests
+jest.config.js
+jest.setup*.js
+coverage
+.eslintrc*
+eslint.config.js
+
+# Docs and misc
+docs
+*.md
+.env*
+!.env.example
+
+# IDE and OS
+.idea
+.vscode
+.DS_Store

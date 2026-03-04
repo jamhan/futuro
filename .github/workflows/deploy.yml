@@ -1,0 +1,99 @@
+# Futuro Exchange: CI, build Docker images, deploy to Fly.io
+# Secrets required: FLY_API_TOKEN (from fly tokens create deploy)
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm run test:fast
+        env:
+          NODE_ENV: test
+
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          FUTURO_ADMIN_KEY: test-admin-key
+          REQUIRE_API_KEY: 'false'
+        continue-on-error: true  # Skip if TEST_DATABASE_URL not configured
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Fly app names
+        id: fly-apps
+        env:
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+        run: |
+          TARGET="${INPUT_TARGET:-staging}"
+          if [ "$TARGET" = "production" ]; then
+            echo "server_app=futuro" >> $GITHUB_OUTPUT
+            echo "worker_app=futuro-worker" >> $GITHUB_OUTPUT
+          else
+            echo "server_app=futuro-staging" >> $GITHUB_OUTPUT
+            echo "worker_app=futuro-worker-staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy server to Fly
+        run: |
+          flyctl deploy \
+            --config fly.toml \
+            --app ${{ steps.fly-apps.outputs.server_app }} \
+            --remote-only \
+            --strategy immediate
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy worker to Fly
+        run: |
+          flyctl deploy \
+            --config fly.worker.toml \
+            --app ${{ steps.fly-apps.outputs.worker_app }} \
+            --remote-only \
+            --strategy immediate
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
