@@ -16,19 +16,19 @@ COPY src ./src/
 
 RUN npm run build && npx prisma generate
 
-# Production image
-FROM node:20-alpine AS runner
+# Production image (Debian slim for Prisma/OpenSSL compatibility)
+FROM node:20-slim AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV WORKER_PORT=8081
 
-# OpenSSL for Prisma native engine (libssl.so.1.1)
-RUN apk add --no-cache openssl openssl1.1-compat
+# OpenSSL for Prisma native engine
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+RUN groupadd --gid 1001 nodejs && useradd --uid 1001 --gid nodejs --shell /bin/false nodejs
 
 # Copy built artifacts and prisma
 COPY --from=builder /app/dist ./dist
