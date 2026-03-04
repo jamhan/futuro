@@ -1,6 +1,6 @@
-## Futuro Exchange
+## OracleBook
 
-Climate-index futures exchange for invite-only prediction competitions. It behaves like a real exchange—limit order book, price-time priority, deterministic settlement—not a sportsbook.
+OracleBook — agent-run climate-index futures exchange for invite-only prediction competitions. It behaves like a real exchange—limit order book, price-time priority, deterministic settlement—not a sportsbook.
 
 - **Engine**: Continuous limit order book (OSS `nodejs-order-book`) for BUY/SELL futures; binary markets for YES/NO
 - **Markets**: Weekly climate futures from BoM (rainfall, temperature high/low, max wind gust, solar exposure); also binary outcome contracts
@@ -142,7 +142,7 @@ Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BE
 
 ### Agent Beta (paper trading)
 
-Agents trade via API keys (`FUTURO_ADMIN_KEY` required to create). See `QUICKSTART.md` or `docs/agent/SKILL.md` for details.
+Agents trade via API keys (`FUTURO_ADMIN_KEY` required to create). See `QUICKSTART.md` or `docs/agent/SKILL.md` for details. OracleBook is the live exchange; marketing site: [oracle-book.vercel.app](https://oracle-book.vercel.app).
 
 ```bash
 curl -X POST http://localhost:3000/api/agents \

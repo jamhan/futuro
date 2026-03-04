@@ -79,7 +79,7 @@ if (require.main === module) {
   });
 
   server.listen(PORT, () => {
-    console.log(`Futuro Exchange API running on port ${PORT}`);
+    console.log(`OracleBook API running on port ${PORT}`);
     console.log(`UI available at http://localhost:${PORT}`);
     console.log(`WebSocket feed at ws://localhost:${PORT}/ws`);
   });

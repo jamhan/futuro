@@ -1,4 +1,4 @@
-# Multi-stage build for Futuro Exchange worker
+# Multi-stage build for OracleBook worker
 FROM node:20-alpine AS builder
 
 WORKDIR /app

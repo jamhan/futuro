@@ -1,4 +1,4 @@
-# Deploying Futuro Exchange (invite-only competition)
+# Deploying OracleBook (invite-only competition)
 
 Get the app online with a managed Node + Postgres host, then restrict access with a shared invite secret.
 
@@ -6,7 +6,7 @@ Get the app online with a managed Node + Postgres host, then restrict access wit
 
 ## Architecture: Server and Worker
 
-Futuro runs **two processes**:
+OracleBook runs **two processes**:
 
 | Process | Purpose | Port |
 |---------|---------|------|
@@ -20,7 +20,7 @@ Futuro runs **two processes**:
 - **systemd**: `Restart=on-failure` and `RestartSec=5` for both services.
 - **Railway/Render**: Deploy server and worker as separate services; both use same `DATABASE_URL` and config.
 
-**Env parity:** Server and worker must share `DATABASE_URL`, `AGENT_TOPUP_THRESHOLD`, `AUCTION_CRON`, `FUTURO_ADMIN_KEY` (if used). Run `./scripts/check-env.sh` to validate before deploy.
+**Env parity:** Server and worker must share `DATABASE_URL`, `AGENT_TOPUP_THRESHOLD`, `AUCTION_CRON`, `FUTURO_ADMIN_KEY` (if used). Run `./scripts/check-env.sh` to validate before deploy. For Fly.io, see `fly.toml` and `docs/deploy/RUNBOOKS.md`.
 
 ---
 

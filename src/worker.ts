@@ -52,6 +52,6 @@ startAuctionCron();
 startOracleIngestionCron();
 
 server.listen(WORKER_PORT, () => {
-  console.log(`[worker] Futuro worker running on port ${WORKER_PORT}`);
+  console.log(`[worker] OracleBook worker running on port ${WORKER_PORT}`);
   console.log(`[worker] Health: http://localhost:${WORKER_PORT}/health`);
 });

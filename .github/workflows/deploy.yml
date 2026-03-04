@@ -1,4 +1,4 @@
-# Futuro Exchange: CI, build Docker images, deploy to Fly.io
+# OracleBook: CI, build Docker images, deploy to Fly.io
 # Secrets required: FLY_API_TOKEN (from fly tokens create deploy)
 
 name: Deploy
@@ -68,11 +68,11 @@ jobs:
         run: |
           TARGET="${INPUT_TARGET:-staging}"
           if [ "$TARGET" = "production" ]; then
-            echo "server_app=futuro" >> $GITHUB_OUTPUT
-            echo "worker_app=futuro-worker" >> $GITHUB_OUTPUT
+            echo "server_app=oraclebook" >> $GITHUB_OUTPUT
+            echo "worker_app=oraclebook-worker" >> $GITHUB_OUTPUT
           else
-            echo "server_app=futuro-staging" >> $GITHUB_OUTPUT
-            echo "worker_app=futuro-worker-staging" >> $GITHUB_OUTPUT
+            echo "server_app=oraclebook-staging" >> $GITHUB_OUTPUT
+            echo "worker_app=oraclebook-worker-staging" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup Fly CLI

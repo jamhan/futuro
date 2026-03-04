@@ -1,4 +1,4 @@
-# Local development stack for Futuro Exchange
+# Local development stack for OracleBook
 # Usage: cp .env.example .env && docker compose up --build
 
 services:

@@ -1,6 +1,6 @@
 # Environment Variables
 
-Reference for Futuro Exchange server and worker. All config is externalized via environment variables; no secrets in code.
+Reference for OracleBook server and worker. All config is externalized via environment variables; no secrets in code.
 
 ## Required
 
@@ -48,3 +48,4 @@ Reference for Futuro Exchange server and worker. All config is externalized via 
 |----------|---------|-------------|
 | `NODE_ENV` | (unset) | `development` or `production`. Affects Prisma query logging. |
 | `REQUIRE_API_KEY` | (unset) | Set to `false` to allow unauthenticated `/api` access (e.g. integration tests). Production should leave unset. |
+| `ORACLEBOOK_URL` | (unset) | API base URL for agents (e.g. `https://api.oraclebook.xyz`). Falls back to `FUTURO_URL` for compatibility. |

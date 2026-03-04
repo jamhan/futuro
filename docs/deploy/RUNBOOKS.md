@@ -1,6 +1,6 @@
 # Deployment Runbooks
 
-Procedures for incidents and maintenance on Futuro Exchange (Fly.io).
+Procedures for incidents and maintenance on OracleBook (Fly.io).
 
 ---
 
@@ -15,18 +15,18 @@ Procedures for incidents and maintenance on Futuro Exchange (Fly.io).
 
 1. **List releases**
    ```bash
-   fly releases -a futuro
-   fly releases -a futuro-worker
+   fly releases -a oraclebook
+   fly releases -a oraclebook-worker
    ```
 
 2. **Rollback server**
    ```bash
-   fly releases rollback -a futuro
+   fly releases rollback -a oraclebook
    ```
 
 3. **Rollback worker**
    ```bash
-   fly releases rollback -a futuro-worker
+   fly releases rollback -a oraclebook-worker
    ```
 
 4. **Verify**
@@ -51,7 +51,7 @@ Procedures for incidents and maintenance on Futuro Exchange (Fly.io).
 
 1. **Check worker logs**
    ```bash
-   fly logs -a futuro-worker
+   fly logs -a oraclebook-worker
    ```
    Look for `[oracleIngestion]` messages and error counts.
 
@@ -87,14 +87,14 @@ Procedures for incidents and maintenance on Futuro Exchange (Fly.io).
 
 2. **Update secrets**
    ```bash
-   fly secrets set DATABASE_URL="postgresql://..." -a futuro
-   fly secrets set DATABASE_URL="postgresql://..." -a futuro-worker
+   fly secrets set DATABASE_URL="postgresql://..." -a oraclebook
+   fly secrets set DATABASE_URL="postgresql://..." -a oraclebook-worker
    ```
 
 3. **Restart machines** (to pick up new secret)
    ```bash
-   fly machine restart -a futuro
-   fly machine restart -a futuro-worker
+   fly machine restart -a oraclebook
+   fly machine restart -a oraclebook-worker
    ```
 
 4. **Verify**
@@ -114,16 +114,16 @@ Procedures for incidents and maintenance on Futuro Exchange (Fly.io).
 
 1. **Scale down server** (stops new traffic)
    ```bash
-   fly scale count 0 -a futuro
+   fly scale count 0 -a oraclebook
    ```
    This stops the API and WebSocket. Existing connections will drop.
 
 2. **Let worker finish** (optional)
    - Worker continues running (paper topup, oracle ingestion)
-   - Or scale worker to 0: `fly scale count 0 -a futuro-worker`
+   - Or scale worker to 0: `fly scale count 0 -a oraclebook-worker`
 
 3. **Lock markets** (when server is back)
-   - Restore: `fly scale count 1 -a futuro`
+   - Restore: `fly scale count 1 -a oraclebook`
    - Use admin API to lock all OPEN markets: `POST /api/markets/:id/lock` for each
 
 4. **Communicate**
@@ -144,20 +144,20 @@ Before the first deploy, create the apps and attach Postgres:
 
 2. **Create app and attach DB**
    ```bash
-   fly apps create futuro-staging
-   fly postgres attach <postgres-app> -a futuro-staging
+   fly apps create oraclebook-staging
+   fly postgres attach <postgres-app> -a oraclebook-staging
    ```
 
 3. **Create worker app**
    ```bash
-   fly apps create futuro-worker-staging
-   fly postgres attach <postgres-app> -a futuro-worker-staging
+   fly apps create oraclebook-worker-staging
+   fly postgres attach <postgres-app> -a oraclebook-worker-staging
    ```
 
 4. **Set secrets**
    ```bash
-   fly secrets set FUTURO_ADMIN_KEY=... -a futuro-staging
-   fly secrets set FUTURO_ADMIN_KEY=... -a futuro-worker-staging
+   fly secrets set FUTURO_ADMIN_KEY=... -a oraclebook-staging
+   fly secrets set FUTURO_ADMIN_KEY=... -a oraclebook-worker-staging
    # INVITE_SECRET if using invite-only
    ```
 

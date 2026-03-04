@@ -4,7 +4,7 @@
  *
  * Run: AGENT_KEY=agent_xxx tsx examples/agent-bot.ts
  */
-const BASE_URL = process.env.FUTURO_URL || 'http://localhost:3000';
+const BASE_URL = process.env.ORACLEBOOK_URL || process.env.FUTURO_URL || 'http://localhost:3000';
 const AGENT_KEY = process.env.AGENT_KEY;
 
 if (!AGENT_KEY) {

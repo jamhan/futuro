@@ -1,8 +1,8 @@
-# Futuro Exchange server (API + WebSocket)
+# OracleBook server (API + WebSocket)
 # Deploy: fly deploy
 # Secrets: fly secrets set DATABASE_URL=... FUTURO_ADMIN_KEY=... INVITE_SECRET=...
 
-app = "futuro"
+app = "oraclebook"
 
 [build]
   dockerfile = "Dockerfile.server"
