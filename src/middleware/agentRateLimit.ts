@@ -5,6 +5,9 @@ const ORDERS_PER_MIN = parseInt(process.env.AGENT_RATE_LIMIT_ORDERS_PER_MIN ?? '
 const MIN_SPACING_MS = parseInt(process.env.AGENT_RATE_LIMIT_MIN_SPACING_MS ?? '1000', 10);
 const REFILL_MS = 60_000;
 
+const GLOBAL_ENABLED =
+  (process.env.AGENT_RATE_LIMIT_GLOBAL_ENABLED ?? 'true').toLowerCase() !== 'false';
+
 interface AgentBucket {
   tokens: number;
   lastRefillAt: number;
@@ -48,6 +51,7 @@ function tryConsume(agentId: string): { ok: boolean; retryAfterMs?: number } {
 /**
  * Rate limit for agent order placement. Only applies when req.agent is set.
  * Token bucket: ORDERS_PER_MIN per minute, min MIN_SPACING_MS between orders.
+ * Set AGENT_RATE_LIMIT_GLOBAL_ENABLED=false to disable (per-market limit only).
  */
 export function agentRateLimitMiddleware(
   req: Request,
@@ -55,6 +59,7 @@ export function agentRateLimitMiddleware(
   next: NextFunction
 ): void {
   if (!req.agent) return next();
+  if (!GLOBAL_ENABLED) return next();
 
   const result = tryConsume(req.agent.id);
   if (!result.ok) {

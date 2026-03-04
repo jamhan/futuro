@@ -19,6 +19,8 @@ import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 import { MarketState, MarketType, OrderSide, OrderType, Outcome } from '../domain/types';
 import { getPrismaClient } from '../db/client';
 import { agentRateLimitMiddleware } from '../middleware/agentRateLimit';
+import { agentPerMarketRateLimitMiddleware } from '../middleware/agentPerMarketRateLimit';
+import { isOrderRejectionError } from '../errors/orderRejection';
 import { z } from 'zod';
 
 const router = Router();
@@ -308,7 +310,7 @@ router.get('/markets/:marketId/orders', async (req, res) => {
   }
 });
 
-router.post('/orders', agentRateLimitMiddleware, async (req, res) => {
+router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddleware, async (req, res) => {
   try {
     const data = placeOrderSchema.parse(req.body);
     const effectiveAccountId = req.accountId ?? data.accountId;
@@ -332,11 +334,14 @@ router.post('/orders', agentRateLimitMiddleware, async (req, res) => {
     res.status(201).json(result);
   } catch (error: any) {
     if (req.agent) {
-      const reason = error.message?.slice(0, 50) ?? 'unknown';
+      const reason = isOrderRejectionError(error) ? error.code : (error.message?.slice(0, 50) ?? 'unknown');
       agentOrderRejectionsTotal.inc({ reason });
     }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors });
+    }
+    if (isOrderRejectionError(error)) {
+      return res.status(400).json({ error: error.toJSON() });
     }
     res.status(400).json({ error: error.message });
   }

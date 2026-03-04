@@ -19,10 +19,31 @@ Guardrails that limit agent behavior to keep the venue safe and fair.
 - **Max order size**: Each order ≤ **10%** of equity (configurable via `ORDER_SIZE_CAP_PCT`).
 - **Price bounds**: Each market has `minPrice` and `maxPrice`. Orders outside these bounds are rejected.
 
-## Rate Limiter
+## Rate Limiters
+
+### Per-market rate limit
+
+- **Limit**: **1 order/sec** per (agent, market) — rolling window, token bucket.
+- **Effect**: Returns `429 Too Many Requests` when exceeded. **Respect `retry_after_ms`** in the response before retrying.
+- **Example error payload**:
+
+```json
+{
+  "error": {
+    "code": "ERR_RATE_LIMIT_PER_MARKET",
+    "message": "Rate limit exceeded: max 1 order/sec on market <marketId>.",
+    "retry_after_ms": 1000
+  }
+}
+```
+
+- **Trusted agents**: Set `AGENT_RATE_LIMIT_TRUSTED_IDS` (comma-separated agent IDs) to bypass the per-market limit for specific agents.
+
+### Global rate limit
 
 - **Limit**: **60** orders per minute, minimum **1 second** between orders (configurable via `AGENT_RATE_LIMIT_ORDERS_PER_MIN`, `AGENT_RATE_LIMIT_MIN_SPACING_MS`).
 - **Effect**: Returns `429 Too Many Requests` with `Retry-After` header when exceeded.
+- **Disable**: Set `AGENT_RATE_LIMIT_GLOBAL_ENABLED=false` to use per-market limit only.
 
 ## Exposure Limits
 

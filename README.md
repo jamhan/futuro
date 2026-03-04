@@ -1,14 +1,15 @@
 ## Futuro Exchange
 
-Climate-index futures exchange for invite-only prediction competitions.
+Climate-index futures exchange for invite-only prediction competitions. It behaves like a real exchange—limit order book, price-time priority, deterministic settlement—not a sportsbook.
 
-- **Engine**: continuous limit order book (OSS `nodejs-order-book`) for BUY/SELL futures
-- **Markets**: weekly climate futures from BoM (rainfall, temperature high/low, max wind gust, solar exposure)
-- **Settlement**: index-settled, PnL = quantity × index value
+- **Engine**: Continuous limit order book (OSS `nodejs-order-book`) for BUY/SELL futures; binary markets for YES/NO
+- **Markets**: Weekly climate futures from BoM (rainfall, temperature high/low, max wind gust, solar exposure); also binary outcome contracts
+- **Realtime**: WebSocket feed at `/ws` for order book and trade updates
+- **Settlement**: Index-settled for futures; 1.00/0.00 for binary
 
 ### Local development
 
-See `QUICKSTART.md` for full setup, but in short:
+See `QUICKSTART.md` for full setup. In short:
 
 ```bash
 cp .env.example .env   # or create .env with DATABASE_URL, PORT
@@ -22,6 +23,20 @@ npm run dev
 
 Then open `http://localhost:3000` in your browser.
 
+### Market lifecycle
+
+```
+DRAFT → OPEN → LOCKED → RESOLVED → SETTLED
+```
+
+- **DRAFT**: Market created (e.g. via `POST /api/markets`), not yet tradable
+- **OPEN**: Active trading; `POST /api/markets/:id/open` transitions from DRAFT
+- **LOCKED**: Trading stopped, awaiting resolution
+- **RESOLVED**: Outcome determined by oracle
+- **SETTLED**: All positions settled
+
+The BOM seed (`npm run seed:bom-weekly`) creates markets directly in **OPEN** state. API-created markets start as **DRAFT** and must be opened explicitly.
+
 ### Testing
 
 ```bash
@@ -29,271 +44,136 @@ npm test
 npm run test:coverage
 ```
 
-Tests cover:
+Tests cover matching (binary + futures/OSS), order validation, settlement, and API behaviour. Smoke test for futures:
 
-- Matching (binary + futures/OSS)
-- Order validation and persistence shape (remaining size, counterparty fills)
-- Settlement (binary + futures, zero-sum)
-- Basic API behaviour
+```bash
+./run-quick-test-futures.sh   # requires server running
+```
 
 ### Deploying / invite-only competitions
 
-For deployment options (Railway, Render, VPS) and invite-only access using `INVITE_SECRET`, see `DEPLOY.md`.
+For deployment (Railway, Render, VPS) and invite-only access via `INVITE_SECRET`, see `DEPLOY.md`.
 
-# Futuro Exchange
+---
 
-A minimum viable product for a peer-to-peer weather prediction exchange. This is **not** a sportsbook—it behaves like a real stock exchange with an order book, matching engine, and deterministic settlement.
+## Architecture
 
-## Architecture Overview
+### Core principles
 
-### Core Principles
+1. **Correctness and determinism**: Matching engine is pure and deterministic, fully unit-tested
+2. **Reliability and auditability**: All trades and settlements recorded immutably (double-entry ledger)
+3. **Clear domain modeling**: Explicit types for Market, Order, Trade, Outcome, OracleResult, Account
+4. **Simple but extensible**: Clean separation of concerns
 
-1. **Correctness and Determinism**: The matching engine is pure and deterministic, fully unit-tested
-2. **Reliability and Auditability**: All trades and settlements are recorded immutably
-3. **Clear Domain Modeling**: Explicit types for Market, Order, Trade, Outcome, OracleResult, Account
-4. **Simple but Extensible**: Clean separation of concerns, easy to extend
-5. **Minimal UI**: Functional interface for order placement and order book viewing
+### Domain model
 
-### Domain Model
-
-- **Market**: Binary outcome contract (e.g., "Will NYC rainfall on 2026-01-15 be ≥ 5mm?")
-- **Order**: Trading intent (Limit or Market, buying YES or NO)
+- **Market**: Binary (YES/NO) or futures (index-settled); lifecycle DRAFT → OPEN → LOCKED → RESOLVED → SETTLED
+- **Order**: Limit or Market, BUY/SELL (futures) or BUY_YES/BUY_NO (binary)
 - **Trade**: Matched order pair with price and quantity
-- **Outcome**: YES or NO (determined by oracle)
-- **OracleResult**: Immutable resolution of a market
 - **Account**: User balance and positions
+- **OracleResult**: Immutable resolution for settlement
 
-### Market Lifecycle
-
-```
-DRAFT → OPEN → LOCKED → RESOLVED → SETTLED
-```
-
-- **DRAFT**: Market created but not yet open
-- **OPEN**: Active trading allowed
-- **LOCKED**: Trading stopped, awaiting resolution
-- **RESOLVED**: Outcome determined by oracle
-- **SETTLED**: All positions settled
-
-### Matching Engine
-
-- **Price-time priority**: Orders matched by best price first, then oldest first
-- **Binary market matching**: BUY_YES orders match with BUY_NO orders
-- **Pure function**: No side effects, fully deterministic, unit-tested
-- **Separate from persistence**: Matching logic is independent of database
-
-### Settlement
-
-- **Winning outcome**: Pays 1.00 per share
-- **Losing outcome**: Pays 0.00 per share
-- **Idempotent**: Can be run multiple times safely
-- **Zero-sum**: All balances reconcile correctly
-
-## Tech Stack
+### Tech stack
 
 - **Backend**: TypeScript, Node.js, Express
 - **Database**: PostgreSQL with Prisma ORM
 - **Decimal arithmetic**: `decimal.js` (no floating point bugs)
 - **Validation**: Zod for API input validation
-- **Frontend**: Vanilla JavaScript (minimal, functional UI)
+- **Realtime**: WebSocket (`ws`) for order book and trades
 
-## Setup
+### Order rejection (structured errors)
 
-### Prerequisites
+Order rejections return a structured payload for clients:
 
-- Node.js 18+
-- PostgreSQL 12+
-
-### Installation
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env
-   # Edit .env and set DATABASE_URL
-   ```
-
-4. Generate Prisma client:
-   ```bash
-   npm run prisma:generate
-   ```
-
-5. Run migrations:
-   ```bash
-   npm run prisma:migrate
-   ```
-
-6. Seed the database:
-   ```bash
-   npm run prisma:seed
-   ```
-
-### Running
-
-Start the development server:
-```bash
-npm run dev
+```json
+{
+  "error": {
+    "code": "PRICE_ABOVE_MAX",
+    "message": "Price 100 above market maximum 50",
+    "details": { "marketMin": 0, "marketMax": 50 }
+  }
+}
 ```
 
-The API will be available at `http://localhost:3000/api`
-The UI will be available at `http://localhost:3000`
+Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BELOW_MIN`, `PRICE_ABOVE_MAX`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_BALANCE`, `ORDER_SIZE_EXCEEDS_LIMIT`, `EXPOSURE_LIMIT_EXCEEDED`, `POSITION_LIMIT_EXCEEDED`, `DEPLOYMENT_CAP_EXCEEDED`, `ERR_RATE_LIMIT_PER_MARKET` (per-agent per-market limit: 1 order/sec; see [docs/agent/RULES.md](docs/agent/RULES.md)). Rate-limit errors include `retry_after_ms`:
 
-## API Endpoints
+```json
+{
+  "error": {
+    "code": "ERR_RATE_LIMIT_PER_MARKET",
+    "message": "Rate limit exceeded: max 1 order/sec on market <marketId>.",
+    "retry_after_ms": 1000
+  }
+}
+```
+
+---
+
+## API
 
 ### Markets
 
-- `GET /api/markets` - List all markets
-- `GET /api/markets/:id` - Get market details
-- `POST /api/markets` - Create a new market
-- `POST /api/markets/:id/open` - Open market for trading
-- `POST /api/markets/:id/lock` - Lock market (stop trading)
-- `POST /api/markets/:id/resolve` - Resolve market using oracle
+- `GET /api/markets` – List markets
+- `GET /api/markets/:id` – Market details
+- `POST /api/markets` – Create (DRAFT)
+- `POST /api/markets/:id/open` – Open for trading
+- `POST /api/markets/:id/lock` – Lock (stop trading)
+- `POST /api/markets/:id/resolve` – Resolve via oracle
+- `POST /api/markets/:id/settle` – Settle positions
 
 ### Orders
 
-- `GET /api/markets/:marketId/orders` - List orders for a market
-- `POST /api/orders` - Place an order
-- `DELETE /api/orders/:id?accountId=...` - Cancel an order
+- `GET /api/markets/:marketId/orders` – Order book
+- `POST /api/orders` – Place order
+- `DELETE /api/orders/:id?accountId=...` – Cancel
 
-### Trades
+### Trades / accounts
 
-- `GET /api/markets/:marketId/trades` - List recent trades
+- `GET /api/markets/:marketId/trades` – Recent trades
+- `GET /api/accounts/:id` – Account details
+- `POST /api/accounts` – Create account (legacy flow)
 
-### Accounts
+### Agent Beta (paper trading)
 
-- `GET /api/accounts/:id` - Get account details
-- `POST /api/accounts` - Create a new account
-
-### Agent Beta
-
-Paper trading for agents: each agent gets a $10k virtual balance and trades via API keys.
-
-**Request an API key** (requires `FUTURO_ADMIN_KEY`):
+Agents trade via API keys (`FUTURO_ADMIN_KEY` required to create). See `QUICKSTART.md` or `docs/agent/SKILL.md` for details.
 
 ```bash
 curl -X POST http://localhost:3000/api/agents \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
+  -H "Authorization: Bearer $FUTURO_ADMIN_KEY" \
   -d '{"name": "my-agent"}'
 ```
 
-Response includes `apiKey`, `accountId`, and `name`. **Store the API key securely—it is returned only once.**
+Use `X-Agent-Key: agent_xxx` for orders (omit `accountId` in body). Per-market rate limit: 1 order/sec. Respect `retry_after_ms` in 429 responses.
 
-**Place an order** using the agent key (omit `accountId` in body):
+---
 
-```bash
-curl -X POST http://localhost:3000/api/orders \
-  -H "Content-Type: application/json" \
-  -H "X-Agent-Key: agent_your-key-here" \
-  -d '{
-    "marketId": "market-id-here",
-    "side": "BUY_YES",
-    "type": "LIMIT",
-    "price": 0.6,
-    "quantity": 10
-  }'
-```
-
-**View account** (agents can only access their own):
-
-```bash
-curl http://localhost:3000/api/accounts/ACCOUNT_ID \
-  -H "X-Agent-Key: agent_your-key-here"
-```
-
-See `examples/agent-bot.ts` for a minimal trading bot skeleton.
-
-## Usage Example
-
-1. **Create an account**:
-   ```bash
-   curl -X POST http://localhost:3000/api/accounts \
-     -H "Content-Type: application/json" \
-     -d '{"balance": 1000}'
-   ```
-
-2. **Place a limit order** (buying YES at 0.6):
-   ```bash
-   curl -X POST http://localhost:3000/api/orders \
-     -H "Content-Type: application/json" \
-     -d '{
-       "marketId": "market-id-here",
-       "accountId": "account-id-here",
-       "side": "BUY_YES",
-       "type": "LIMIT",
-       "price": 0.6,
-       "quantity": 10
-     }'
-   ```
-
-3. **View order book**:
-   ```bash
-   curl http://localhost:3000/api/markets/:marketId/orders
-   ```
-
-4. **Resolve market** (after locking):
-   ```bash
-   curl -X POST http://localhost:3000/api/markets/:id/resolve
-   ```
-
-## Testing
-
-Run unit tests:
-```bash
-npm test
-```
-
-The matching engine has comprehensive unit tests covering:
-- Price-time priority matching
-- Partial fills
-- Market orders
-- Order book sorting
-
-## Architecture Decisions
+## Architecture decisions
 
 ### Why Decimal.js?
 
-Floating point arithmetic is unreliable for financial calculations. `decimal.js` provides exact decimal arithmetic, preventing rounding errors that could lead to incorrect settlements.
+Floating point is unreliable for money. `decimal.js` gives exact decimal arithmetic.
 
-### Why Separate Matching Engine?
+### Why separate matching engine?
 
-The matching engine is a pure function with no database dependencies. This makes it:
-- Easy to test
-- Deterministic
-- Possible to run in different contexts (e.g., simulation, backtesting)
+Pure function, no DB dependencies: easy to test, deterministic, reusable for simulation/backtesting.
 
-### Why Binary Markets Only?
+### Why binary and futures?
 
-Binary markets are the simplest case and demonstrate the core exchange mechanics. Extending to multi-outcome markets would require more complex matching logic but follows the same principles.
+Binary markets are the simplest case; futures (BoM climate indices) are the primary use. Same matching principles, different settlement (1.00/0.00 vs index value).
 
-### Why Mock Oracle?
+### Oracle
 
-The oracle interface is abstracted, allowing easy swapping of implementations. The mock oracle provides deterministic values for development and testing. In production, this would connect to NOAA API or similar.
+Mock oracle for development. Production would integrate BoM/NOAA for settlement.
 
 ### Tradeoffs
 
-- **No real-time updates**: The UI polls the API. For production, WebSockets would be needed.
-- **Simplified position tracking**: Positions are updated on each trade. A more sophisticated system would track cost basis.
-- **No margin/leverage**: Accounts must have sufficient balance for each trade.
-- **Single market focus**: The UI shows one market at a time.
+- Position tracking updated on each trade; no cost-basis tracking
+- No margin/leverage; full balance required per trade
+- Minimal UI; WebSocket provides realtime data for custom frontends
 
-## Future Extensions
-
-- WebSocket support for real-time order book updates
-- Multi-outcome markets (not just binary)
-- Advanced order types (stop-loss, iceberg, etc.)
-- Position cost basis tracking
-- Margin trading
-- Historical data and analytics
-- Integration with real weather APIs (NOAA, OpenWeatherMap)
+---
 
 ## License
 
 MIT
-
-# futuro

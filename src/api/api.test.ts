@@ -4,6 +4,7 @@
 import request from 'supertest';
 import { getPrismaClient } from '../db/client';
 import { app } from '../server';
+import { setNowFn, resetNowFn, clearBuckets } from '../lib/rateLimit/tokenBucket';
 
 const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY || 'test-admin-key';
 const prisma = getPrismaClient();
@@ -211,6 +212,75 @@ describe('API', () => {
       expect(orderRes.status).toBe(201);
       expect(orderRes.body.order.accountId).toBe(accountId);
     });
+
+    it('returns 429 on per-market rate limit when two orders sent back-to-back', async () => {
+      let now = 1000;
+      setNowFn(() => now);
+      clearBuckets();
+
+      try {
+        const agentRes = await request(app)
+          .post('/api/agents')
+          .set('Content-Type', 'application/json')
+          .set('Authorization', `Bearer ${ADMIN_KEY}`)
+          .send({ name: 'rate-limit-agent' });
+        const agentKey = agentRes.body.apiKey;
+        const accountId = agentRes.body.accountId;
+
+        const marketRes = await request(app)
+          .post('/api/markets')
+          .set('Content-Type', 'application/json')
+          .send({
+            description: 'Test rate limit market',
+            location: 'Test',
+            eventDate: new Date(Date.now() + 86400000).toISOString(),
+            condition: 'x > 0',
+            marketType: 'BINARY',
+          });
+        const marketId = marketRes.body.id;
+        await request(app).post(`/api/markets/${marketId}/open`);
+
+        const orderPayload = {
+          marketId,
+          side: 'BUY_YES' as const,
+          type: 'LIMIT' as const,
+          price: 0.5,
+          quantity: 5,
+        };
+
+        const first = await request(app)
+          .post('/api/orders')
+          .set('Content-Type', 'application/json')
+          .set('X-Agent-Key', agentKey)
+          .send(orderPayload);
+        expect(first.status).toBe(201);
+        expect(first.body.order?.accountId ?? first.body.accountId).toBe(accountId);
+
+        const second = await request(app)
+          .post('/api/orders')
+          .set('Content-Type', 'application/json')
+          .set('X-Agent-Key', agentKey)
+          .send(orderPayload);
+        expect(second.status).toBe(429);
+        expect(second.body.error).toMatchObject({
+          code: 'ERR_RATE_LIMIT_PER_MARKET',
+          message: expect.stringContaining(`market ${marketId}`),
+          retry_after_ms: expect.any(Number),
+        });
+        expect(second.body.error.retry_after_ms).toBeGreaterThanOrEqual(900);
+
+        now = 2100; // 1.1 sec later
+
+        const third = await request(app)
+          .post('/api/orders')
+          .set('Content-Type', 'application/json')
+          .set('X-Agent-Key', agentKey)
+          .send(orderPayload);
+        expect(third.status).toBe(201);
+      } finally {
+        resetNowFn();
+      }
+    }, 25000);
 
     it('returns 403 when agent sends conflicting accountId', async () => {
       const agentRes = await request(app)

@@ -12,6 +12,18 @@ export const agentOrderRejectionsTotal = new Counter({
   labelNames: ['reason'],
 });
 
+export const agentRateLimitHitsTotal = new Counter({
+  name: 'agent_rate_limit_hits_total',
+  help: 'Total per-market rate limit rejections',
+  labelNames: ['agentId', 'marketId'],
+});
+
+export const agentRateLimitTokensGauge = new Gauge({
+  name: 'agent_rate_limit_tokens',
+  help: 'Current tokens per (agentId, marketId) - debug only',
+  labelNames: ['agentId', 'marketId'],
+});
+
 export const agentLiquidationsTotal = new Counter({
   name: 'agent_liquidations_total',
   help: 'Total paper top-ups (liquidations) for agents',
