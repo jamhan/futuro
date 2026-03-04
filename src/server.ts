@@ -24,7 +24,9 @@ if (INVITE_SECRET) {
 app.use('/api', agentAuthMiddleware);
 app.use('/api', routes);
 
-startPaperTopupCron();
+if (process.env.NODE_ENV !== 'test') {
+  startPaperTopupCron();
+}
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
