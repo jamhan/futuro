@@ -1,10 +1,10 @@
 /**
- * Paper top-up service tests. Requires DATABASE_URL.
+ * Paper top-up service integration tests. Requires DATABASE_URL.
  */
 import bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
-import { getPrismaClient } from '../db/client';
-import { resetPaperBalance, runPaperTopupJob } from './paperTopup';
+import { getPrismaClient } from '../../src/db/client';
+import { resetPaperBalance, runPaperTopupJob } from '../../src/services/paperTopup';
 
 const prisma = getPrismaClient();
 

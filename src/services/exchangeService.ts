@@ -14,6 +14,11 @@ import { matchOrderWithOss } from '../engine/ossMatchingAdapter';
 import { Order, createOrder, OrderInput, OrderValidator } from '../domain/order';
 import { MarketLifecycle } from '../domain/market';
 import { MarketState, OrderSide, OrderStatus } from '../domain/types';
+import {
+  OrderRejectionError,
+  ORDER_REJECTION_CODES,
+} from '../errors/orderRejection';
+import { matchingLatencyMs } from './metrics';
 
 /**
  * ExchangeService orchestrates all exchange operations
@@ -39,34 +44,51 @@ export class ExchangeService {
     // Validate order
     const errors = OrderValidator.validate(input);
     if (errors.length > 0) {
-      throw new Error(`Invalid order: ${errors.join(', ')}`);
+      throw new OrderRejectionError(
+        ORDER_REJECTION_CODES.VALIDATION_FAILED,
+        `Invalid order: ${errors.join(', ')}`
+      );
     }
 
     // Check market state
     const market = await this.marketRepo.findById(input.marketId);
     if (!market) {
-      throw new Error('Market not found');
+      throw new OrderRejectionError(ORDER_REJECTION_CODES.MARKET_NOT_FOUND, 'Market not found');
     }
 
     if (!MarketLifecycle.isTradingAllowed(market.state)) {
-      throw new Error(`Trading not allowed in market state: ${market.state}`);
+      throw new OrderRejectionError(
+        ORDER_REJECTION_CODES.TRADING_NOT_ALLOWED,
+        `Trading not allowed in market state: ${market.state}`,
+        { marketState: market.state }
+      );
     }
 
     // Price bounds (for limit orders)
     if (input.type === 'LIMIT' && input.price != null) {
       const price = input.price;
+      const minNum = market.minPrice != null ? Number(market.minPrice) : undefined;
+      const maxNum = market.maxPrice != null ? Number(market.maxPrice) : undefined;
       if (market.minPrice != null && price.lt(market.minPrice)) {
-        throw new Error(`Price ${price} below market minimum ${market.minPrice}`);
+        throw new OrderRejectionError(
+          ORDER_REJECTION_CODES.PRICE_BELOW_MIN,
+          `Price ${price} below market minimum ${market.minPrice}`,
+          { marketMin: minNum, marketMax: maxNum }
+        );
       }
       if (market.maxPrice != null && price.gt(market.maxPrice)) {
-        throw new Error(`Price ${price} above market maximum ${market.maxPrice}`);
+        throw new OrderRejectionError(
+          ORDER_REJECTION_CODES.PRICE_ABOVE_MAX,
+          `Price ${price} above market maximum ${market.maxPrice}`,
+          { marketMin: minNum, marketMax: maxNum }
+        );
       }
     }
 
     // Check account balance (for buy orders)
     const account = await this.accountRepo.findById(input.accountId);
     if (!account) {
-      throw new Error('Account not found');
+      throw new OrderRejectionError(ORDER_REJECTION_CODES.ACCOUNT_NOT_FOUND, 'Account not found');
     }
 
     const isBuy = [
@@ -78,7 +100,7 @@ export class ExchangeService {
       const price = input.price || new Decimal(1);
       const cost = price.times(input.quantity);
       if (account.balance.lt(cost)) {
-        throw new Error('Insufficient balance');
+        throw new OrderRejectionError(ORDER_REJECTION_CODES.INSUFFICIENT_BALANCE, 'Insufficient balance');
       }
 
       // Agent cash deployment cap: block buys when deployed + cost >= cap
@@ -91,7 +113,8 @@ export class ExchangeService {
           cost
         );
         if (wouldExceed) {
-          throw new Error(
+          throw new OrderRejectionError(
+            ORDER_REJECTION_CODES.DEPLOYMENT_CAP_EXCEEDED,
             `Deployed cash cap exceeded (max $${this.deploymentService.getCap()})`
           );
         }
@@ -100,8 +123,10 @@ export class ExchangeService {
         const orderSizeCapPct = parseFloat(process.env.ORDER_SIZE_CAP_PCT ?? '10');
         const maxQty = account.balance.times(orderSizeCapPct / 100).floor();
         if (input.quantity.gt(maxQty)) {
-          throw new Error(
-            `Order size exceeds ${orderSizeCapPct}% of equity (max ${maxQty})`
+          throw new OrderRejectionError(
+            ORDER_REJECTION_CODES.ORDER_SIZE_EXCEEDS_LIMIT,
+            `Order size exceeds ${orderSizeCapPct}% of equity (max ${maxQty})`,
+            { maxQuantity: maxQty.toNumber() }
           );
         }
 
@@ -116,7 +141,8 @@ export class ExchangeService {
         );
         if (wouldExceedExposure) {
           const exposureCapPct = process.env.EXPOSURE_CAP_PCT ?? '20';
-          throw new Error(
+          throw new OrderRejectionError(
+            ORDER_REJECTION_CODES.EXPOSURE_LIMIT_EXCEEDED,
             `Exposure in correlated group would exceed ${exposureCapPct}% of equity`
           );
         }
@@ -132,8 +158,10 @@ export class ExchangeService {
             ? currentQty.plus(input.quantity)
             : currentQty.minus(input.quantity);
           if (postTradeQty.abs().gt(maxPosition)) {
-            throw new Error(
-              `Position would exceed ${positionCapPct}% of equity (max ${maxPosition} contracts)`
+            throw new OrderRejectionError(
+              ORDER_REJECTION_CODES.POSITION_LIMIT_EXCEEDED,
+              `Position would exceed ${positionCapPct}% of equity (max ${maxPosition} contracts)`,
+              { maxPosition: maxPosition.toNumber() }
             );
           }
         }
@@ -145,6 +173,7 @@ export class ExchangeService {
 
     const isFutures = isFuturesMarket(market);
 
+    const matchStart = process.hrtime.bigint();
     let result;
     if (isFutures) {
       const restingOrders = await this.buildRestingOrders(input.marketId);
@@ -153,6 +182,8 @@ export class ExchangeService {
       const orderBook = await this.buildOrderBook(input.marketId);
       result = MatchingEngine.matchOrder(order, orderBook, input.marketId);
     }
+    const matchElapsedMs = Number(process.hrtime.bigint() - matchStart) / 1e6;
+    matchingLatencyMs.observe({ market_id: input.marketId }, matchElapsedMs);
 
     console.log(`Matching result: ${result.trades.length} trades, ${result.updatedCounterpartyOrders.length} counterparty orders to update`);
     if (result.trades.length > 0 && result.updatedCounterpartyOrders.length === 0) {

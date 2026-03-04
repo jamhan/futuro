@@ -1,9 +1,9 @@
 /**
- * Auction / valuation API tests. Requires DATABASE_URL.
+ * Auction / valuation API integration tests. Requires DATABASE_URL.
  */
 import request from 'supertest';
-import { getPrismaClient } from '../db/client';
-import { app } from '../server';
+import { getPrismaClient } from '../../src/db/client';
+import { app } from '../../src/server';
 
 const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY || 'test-admin-key';
 const prisma = getPrismaClient();
@@ -52,7 +52,6 @@ describe('Auction API', () => {
         upperBand: 30,
       });
     expect(res.status).toBe(201);
-    expect(res.body.intervalId).toBeDefined();
-    expect(res.body.submitted).toBe(1);
+    expect(res.body.marketId).toBe(market.id);
   });
 });

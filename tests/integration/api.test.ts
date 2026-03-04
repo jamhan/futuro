@@ -1,10 +1,10 @@
 /**
- * API tests (no DB required for health; other routes need DATABASE_URL).
+ * API integration tests. Requires DATABASE_URL.
  */
 import request from 'supertest';
-import { getPrismaClient } from '../db/client';
-import { app } from '../server';
-import { setNowFn, resetNowFn, clearBuckets } from '../lib/rateLimit/tokenBucket';
+import { getPrismaClient } from '../../src/db/client';
+import { app } from '../../src/server';
+import { setNowFn, resetNowFn, clearBuckets } from '../../src/lib/rateLimit/tokenBucket';
 
 const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY || 'test-admin-key';
 const prisma = getPrismaClient();

@@ -5,10 +5,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import os from 'os';
-import { getPrismaClient } from '../db/client';
-import { OracleIngestor } from './oracleIngestor';
-import { MarketState, MarketType } from '../domain/types';
-import { IndexType } from '../domain/types';
+import { getPrismaClient } from '../../src/db/client';
+import { OracleIngestor } from '../../src/services/oracleIngestor';
+import { MarketState, MarketType } from '../../src/domain/types';
+import { IndexType } from '../../src/domain/types';
 
 const prisma = getPrismaClient();
 

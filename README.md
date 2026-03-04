@@ -40,8 +40,15 @@ The BOM seed (`npm run seed:bom-weekly`) creates markets directly in **OPEN** st
 ### Testing
 
 ```bash
-npm test
-npm run test:coverage
+npm test                    # All tests (unit + integration)
+npm run test:fast           # Unit tests only (no DB, fast)
+npm run test:integration    # Integration tests (requires DB, run prepare:integration-db first)
+npm run test:coverage       # Coverage report
+```
+
+Before first integration test run, prepare the DB:
+```bash
+./scripts/prepare-integration-db.sh
 ```
 
 Tests cover matching (binary + futures/OSS), order validation, settlement, and API behaviour. Smoke test for futures:

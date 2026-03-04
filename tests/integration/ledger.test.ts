@@ -1,10 +1,10 @@
 /**
- * Ledger service tests. Requires DATABASE_URL.
+ * Ledger service integration tests. Requires DATABASE_URL.
  */
 import Decimal from 'decimal.js';
-import { getPrismaClient } from '../db/client';
-import { LedgerService } from './ledgerService';
-import { ensureSystemAccount, SYSTEM_PAPER_ACCOUNT_ID } from './systemAccount';
+import { getPrismaClient } from '../../src/db/client';
+import { LedgerService } from '../../src/services/ledgerService';
+import { ensureSystemAccount, SYSTEM_PAPER_ACCOUNT_ID } from '../../src/services/systemAccount';
 
 const prisma = getPrismaClient();
 const ledger = new LedgerService();
