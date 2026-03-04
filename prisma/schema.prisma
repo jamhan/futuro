@@ -1,0 +1,149 @@
+// Prisma schema for Futuro Exchange
+// Weather prediction exchange database
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  balance   Decimal  @default(0) @db.Decimal(20, 8)
+  isPaper   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  orders       Order[]
+  positions    Position[]
+  tradesAsBuyer Trade[]  @relation("BuyerTrades")
+  tradesAsSeller Trade[] @relation("SellerTrades")
+  agentProfile AgentProfile?
+
+  @@map("accounts")
+}
+
+model AgentProfile {
+  id              String     @id @default(cuid())
+  name            String
+  apiKeyHash      String
+  startingBalance Decimal    @default(10000) @db.Decimal(20, 8)
+  status          AgentStatus @default(ACTIVE)
+  account         Account    @relation(fields: [accountId], references: [id])
+  accountId       String     @unique
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("agent_profiles")
+}
+
+model Market {
+  id             String      @id @default(uuid())
+  description    String
+  location       String
+  eventDate      DateTime
+  condition      String      // e.g., "rainfall >= 5mm"
+  state          String      // MarketState enum
+  winningOutcome String?     // Outcome enum or null
+  marketType     String      @default("BINARY") // BINARY | FUTURES
+  indexType      String?    // e.g. weather_rainfall | solar_ghi (for FUTURES)
+  indexId        String?    // e.g. station id, region slug (for FUTURES)
+  createdAt      DateTime    @default(now())
+  lockedAt       DateTime?
+  resolvedAt     DateTime?
+  settledAt      DateTime?
+
+  orders        Order[]
+  trades        Trade[]
+  positions     Position[]
+  oracleResult  OracleResult?
+
+  @@map("markets")
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  marketId      String
+  accountId     String
+  side          String   // OrderSide enum
+  type          String   // OrderType enum
+  price         Decimal? @db.Decimal(20, 8) // Null for market orders; index units for futures
+  quantity      Decimal  @db.Decimal(20, 8)
+  filledQuantity Decimal @default(0) @db.Decimal(20, 8)
+  status        String   // OrderStatus enum
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  market        Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  tradesAsBuy   Trade[]  @relation("BuyOrderTrades")
+  tradesAsSell  Trade[]  @relation("SellOrderTrades")
+
+  @@index([marketId, status])
+  @@index([accountId])
+  @@map("orders")
+}
+
+model Trade {
+  id              String   @id @default(uuid())
+  marketId        String
+  buyOrderId      String
+  sellOrderId     String
+  buyerAccountId  String
+  sellerAccountId String
+  price           Decimal  @db.Decimal(20, 8)
+  quantity        Decimal  @db.Decimal(20, 8)
+  buyerSide       String   // OrderSide enum
+  createdAt       DateTime @default(now())
+
+  market          Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  buyOrder        Order    @relation("BuyOrderTrades", fields: [buyOrderId], references: [id])
+  sellOrder       Order    @relation("SellOrderTrades", fields: [sellOrderId], references: [id])
+  buyer           Account  @relation("BuyerTrades", fields: [buyerAccountId], references: [id])
+  seller          Account  @relation("SellerTrades", fields: [sellerAccountId], references: [id])
+
+  @@index([marketId, createdAt])
+  @@index([buyerAccountId])
+  @@index([sellerAccountId])
+  @@map("trades")
+}
+
+model Position {
+  id          String   @id @default(uuid())
+  accountId   String
+  marketId    String
+  yesShares   Decimal  @default(0) @db.Decimal(20, 8)
+  noShares    Decimal  @default(0) @db.Decimal(20, 8)
+  quantity    Decimal? @db.Decimal(20, 8) // Net contracts for FUTURES (positive=long, negative=short)
+
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  market      Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, marketId])
+  @@index([marketId])
+  @@map("positions")
+}
+
+model OracleResult {
+  id        String   @id @default(uuid())
+  marketId  String   @unique
+  outcome   String   // Outcome enum
+  value     Decimal  @db.Decimal(20, 8) // Actual measured value
+  source    String
+  metadata  Json?
+  recordedAt DateTime @default(now())
+
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@map("oracle_results")
+}
+

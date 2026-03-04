@@ -1,3 +1,45 @@
+## Futuro Exchange
+
+Climate-index futures exchange for invite-only prediction competitions.
+
+- **Engine**: continuous limit order book (OSS `nodejs-order-book`) for BUY/SELL futures
+- **Markets**: weekly climate futures from BoM (rainfall, temperature high/low, max wind gust, solar exposure)
+- **Settlement**: index-settled, PnL = quantity × index value
+
+### Local development
+
+See `QUICKSTART.md` for full setup, but in short:
+
+```bash
+cp .env.example .env   # or create .env with DATABASE_URL, PORT
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:seed
+npm run seed:bom-weekly
+npm run dev
+```
+
+Then open `http://localhost:3000` in your browser.
+
+### Testing
+
+```bash
+npm test
+npm run test:coverage
+```
+
+Tests cover:
+
+- Matching (binary + futures/OSS)
+- Order validation and persistence shape (remaining size, counterparty fills)
+- Settlement (binary + futures, zero-sum)
+- Basic API behaviour
+
+### Deploying / invite-only competitions
+
+For deployment options (Railway, Render, VPS) and invite-only access using `INVITE_SECRET`, see `DEPLOY.md`.
+
 # Futuro Exchange
 
 A minimum viable product for a peer-to-peer weather prediction exchange. This is **not** a sportsbook—it behaves like a real stock exchange with an order book, matching engine, and deterministic settlement.
@@ -126,6 +168,45 @@ The UI will be available at `http://localhost:3000`
 
 - `GET /api/accounts/:id` - Get account details
 - `POST /api/accounts` - Create a new account
+
+### Agent Beta
+
+Paper trading for agents: each agent gets a $10k virtual balance and trades via API keys.
+
+**Request an API key** (requires `FUTURO_ADMIN_KEY`):
+
+```bash
+curl -X POST http://localhost:3000/api/agents \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
+  -d '{"name": "my-agent"}'
+```
+
+Response includes `apiKey`, `accountId`, and `name`. **Store the API key securely—it is returned only once.**
+
+**Place an order** using the agent key (omit `accountId` in body):
+
+```bash
+curl -X POST http://localhost:3000/api/orders \
+  -H "Content-Type: application/json" \
+  -H "X-Agent-Key: agent_your-key-here" \
+  -d '{
+    "marketId": "market-id-here",
+    "side": "BUY_YES",
+    "type": "LIMIT",
+    "price": 0.6,
+    "quantity": 10
+  }'
+```
+
+**View account** (agents can only access their own):
+
+```bash
+curl http://localhost:3000/api/accounts/ACCOUNT_ID \
+  -H "X-Agent-Key: agent_your-key-here"
+```
+
+See `examples/agent-bot.ts` for a minimal trading bot skeleton.
 
 ## Usage Example
 

@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "orders" ALTER COLUMN "price" SET DATA TYPE DECIMAL(20,8);
+
+-- AlterTable
+ALTER TABLE "trades" ALTER COLUMN "price" SET DATA TYPE DECIMAL(20,8);

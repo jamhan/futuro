@@ -1,0 +1,106 @@
+import Decimal from 'decimal.js';
+import { Prisma } from '@prisma/client';
+import { getPrismaClient } from '../db/client';
+import { Order, OrderId, MarketId, AccountId } from '../domain/order';
+import { OrderStatus } from '../domain/types';
+
+export class OrderRepository {
+  private prisma = getPrismaClient();
+
+  async create(order: Order): Promise<Order> {
+    const created = await this.prisma.order.create({
+      data: {
+        id: order.id,
+        marketId: order.marketId,
+        accountId: order.accountId,
+        side: order.side,
+        type: order.type,
+        price: order.price ? new Prisma.Decimal(order.price.toString()) : null,
+        quantity: new Prisma.Decimal(order.quantity.toString()),
+        filledQuantity: new Prisma.Decimal(order.filledQuantity.toString()),
+        status: order.status,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      },
+    });
+
+    return this.toDomain(created);
+  }
+
+  async findById(id: OrderId): Promise<Order | null> {
+    const found = await this.prisma.order.findUnique({
+      where: { id },
+    });
+
+    return found ? this.toDomain(found) : null;
+  }
+
+  async findByMarket(marketId: MarketId, status?: OrderStatus): Promise<Order[]> {
+    const where: any = { marketId };
+    if (status) {
+      where.status = status;
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return orders.map(this.toDomain);
+  }
+
+  async update(order: Order): Promise<Order> {
+    // Prisma will automatically update updatedAt due to @updatedAt in schema
+    const updated = await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        filledQuantity: new Prisma.Decimal(order.filledQuantity.toString()),
+        status: order.status,
+        // updatedAt is handled automatically by Prisma
+      },
+    });
+
+    return this.toDomain(updated);
+  }
+
+  async cancel(id: OrderId): Promise<Order> {
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: {
+        status: OrderStatus.CANCELLED,
+        updatedAt: new Date(),
+      },
+    });
+
+    return this.toDomain(updated);
+  }
+
+  private toDomain(dbOrder: {
+    id: string;
+    marketId: string;
+    accountId: string;
+    side: string;
+    type: string;
+    price: any;
+    quantity: any;
+    filledQuantity: any;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }): Order {
+    return {
+      id: dbOrder.id,
+      marketId: dbOrder.marketId,
+      accountId: dbOrder.accountId,
+      side: dbOrder.side as any,
+      type: dbOrder.type as any,
+      price: dbOrder.price ? new Decimal(dbOrder.price.toString()) : null,
+      quantity: new Decimal(dbOrder.quantity.toString()),
+      filledQuantity: new Decimal(dbOrder.filledQuantity.toString()),
+      status: dbOrder.status as OrderStatus,
+      createdAt: dbOrder.createdAt,
+      updatedAt: dbOrder.updatedAt,
+    };
+  }
+}
+
