@@ -6,7 +6,6 @@ import { OrderRepository } from '../repositories/orderRepository';
 import { TradeRepository } from '../repositories/tradeRepository';
 import { AccountRepository } from '../repositories/accountRepository';
 import { LedgerService } from './ledgerService';
-import { DeploymentService } from './deploymentService';
 import { broadcast } from './wsBroadcast';
 import { MatchingEngine, OrderBook } from '../engine/matching';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
@@ -30,7 +29,6 @@ export class ExchangeService {
   private tradeRepo = new TradeRepository();
   private accountRepo = new AccountRepository();
   private ledgerService = new LedgerService();
-  private deploymentService = new DeploymentService();
   private prisma = getPrismaClient();
 
   /**
@@ -83,6 +81,17 @@ export class ExchangeService {
           { marketMin: minNum, marketMax: maxNum }
         );
       }
+
+      // Tick size: 0.1 (<10), 1 (10-100), 10 (>100)
+      const tick = price.lt(10) ? new Decimal(0.1) : price.lt(100) ? new Decimal(1) : new Decimal(10);
+      const remainder = price.div(tick).minus(price.div(tick).round());
+      if (remainder.abs().gte(0.0001)) {
+        throw new OrderRejectionError(
+          ORDER_REJECTION_CODES.INVALID_TICK_SIZE,
+          `Price ${price} invalid: tick size ${tick} (0.1 below 10, 1 for 10-100, 10 above 100)`,
+          { tick: tick.toNumber() }
+        );
+      }
     }
 
     // Check account balance (for buy orders)
@@ -103,68 +112,28 @@ export class ExchangeService {
         throw new OrderRejectionError(ORDER_REJECTION_CODES.INSUFFICIENT_BALANCE, 'Insufficient balance');
       }
 
-      // Agent cash deployment cap: block buys when deployed + cost >= cap
-      const agentProfile = await this.prisma.agentProfile.findUnique({
-        where: { accountId: input.accountId },
-      });
-      if (agentProfile) {
-        const wouldExceed = await this.deploymentService.wouldExceedCap(
-          input.accountId,
-          cost
+    }
+
+    // Max position: ±$1000 notional per market (futures/OSS)
+    if (isFuturesMarket(market)) {
+      const mult = new Decimal((market.contractMultiplier ?? 1).toString());
+      const currentPos = await this.accountRepo.getPosition(input.accountId, input.marketId);
+      const currentQty = currentPos?.quantity ?? new Decimal(0);
+      const isBuyOrder = [OrderSide.BUY].includes(input.side);
+      const postTradeQty = isBuyOrder
+        ? currentQty.plus(input.quantity)
+        : currentQty.minus(input.quantity);
+      const orderPrice = input.type === 'LIMIT' && input.price != null
+        ? input.price
+        : new Decimal((market.maxPrice ?? 100).toString());
+      const postNotional = orderPrice.times(postTradeQty.abs()).times(mult);
+      const MAX_POSITION_NOTIONAL = 1000;
+      if (postNotional.gt(MAX_POSITION_NOTIONAL)) {
+        throw new OrderRejectionError(
+          ORDER_REJECTION_CODES.POSITION_LIMIT_EXCEEDED,
+          `Position notional ${postNotional} would exceed max ±$${MAX_POSITION_NOTIONAL} per market`,
+          { cap: MAX_POSITION_NOTIONAL, postNotional: postNotional.toNumber() }
         );
-        if (wouldExceed) {
-          throw new OrderRejectionError(
-            ORDER_REJECTION_CODES.DEPLOYMENT_CAP_EXCEEDED,
-            `Deployed cash cap exceeded (max $${this.deploymentService.getCap()})`
-          );
-        }
-
-        // Max order size (percentage of equity)
-        const orderSizeCapPct = parseFloat(process.env.ORDER_SIZE_CAP_PCT ?? '10');
-        const maxQty = account.balance.times(orderSizeCapPct / 100).floor();
-        if (input.quantity.gt(maxQty)) {
-          throw new OrderRejectionError(
-            ORDER_REJECTION_CODES.ORDER_SIZE_EXCEEDS_LIMIT,
-            `Order size exceeds ${orderSizeCapPct}% of equity (max ${maxQty})`,
-            { maxQuantity: maxQty.toNumber() }
-          );
-        }
-
-        // Exposure limit: sum notional in correlation group <= EXPOSURE_CAP_PCT of equity
-        const correlationGroupId = market.correlationGroupId ?? market.id;
-        const orderNotional = price.times(input.quantity);
-        const wouldExceedExposure = await this.deploymentService.wouldExceedExposureCap(
-          input.accountId,
-          correlationGroupId,
-          orderNotional,
-          account.balance
-        );
-        if (wouldExceedExposure) {
-          const exposureCapPct = process.env.EXPOSURE_CAP_PCT ?? '20';
-          throw new OrderRejectionError(
-            ORDER_REJECTION_CODES.EXPOSURE_LIMIT_EXCEEDED,
-            `Exposure in correlated group would exceed ${exposureCapPct}% of equity`
-          );
-        }
-
-        // Position limit: max |position| per market <= 5% of equity (in contracts for futures)
-        if (isFuturesMarket(market)) {
-          const positionCapPct = parseFloat(process.env.POSITION_CAP_PCT ?? '5');
-          const maxPosition = account.balance.times(positionCapPct / 100).floor();
-          const currentPos = await this.accountRepo.getPosition(input.accountId, input.marketId);
-          const currentQty = currentPos?.quantity ?? new Decimal(0);
-          const isBuyOrder = input.side === OrderSide.BUY;
-          const postTradeQty = isBuyOrder
-            ? currentQty.plus(input.quantity)
-            : currentQty.minus(input.quantity);
-          if (postTradeQty.abs().gt(maxPosition)) {
-            throw new OrderRejectionError(
-              ORDER_REJECTION_CODES.POSITION_LIMIT_EXCEEDED,
-              `Position would exceed ${positionCapPct}% of equity (max ${maxPosition} contracts)`,
-              { maxPosition: maxPosition.toNumber() }
-            );
-          }
-        }
       }
     }
 

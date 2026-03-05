@@ -34,23 +34,16 @@ npm run prisma:migrate
 npm run prisma:seed
 ```
 
-The seed script creates two test accounts (balance 10000 each). **Markets are climate weeklies only** and are created separately:
-
-**Climate weekly markets** (from [BoM Climate Data Online](https://www.bom.gov.au/climate/data/)):
+The seed script creates two test accounts (balance 10000 each). **Markets** (weather + AEMO electricity) are created separately:
 
 ```bash
-npm run seed:bom-weekly
+npm run seed:markets
 ```
 
-This **clears all existing markets** and creates the **next 8 weeks** of climate futures for 8 capital-city stations (Sydney, Melbourne, Brisbane, Perth, Adelaide, Darwin, Hobart, Canberra). **Five index types per station per week:**
+This **clears all existing markets** and creates:
 
-- **Rainfall** (mm)
-- **Temperature high** (°C)
-- **Temperature low** (°C)
-- **Max wind gust** (km/h)
-- **Daily solar exposure** (MJ/m²)
-
-Use `SEED_WEEKS=12` to create 12 weeks ahead.
+- **Weather (BOM)**: Next 2 days, 2 weekly averages, 2 monthly averages × 8 stations × 5 index types (rainfall, temp high/low, wind gust, solar)
+- **AEMO electricity**: Next 2 days, 2 weekly, 2 monthly averages × 5 NEM regions (NSW, QLD, VIC, SA, TAS)
 
 ## 4. Start Server
 
@@ -67,7 +60,7 @@ If you configured `INVITE_SECRET`, you’ll first be prompted for the invite cod
 ## 6. Test Trading (local)
 
 1. Create an account (or use one from seed).
-2. Pick a climate futures market (e.g. `Sydney weekly rainfall` for a given week).
+2. Pick a climate predictions market (e.g. `Sydney weekly rainfall` for a given week).
 3. Place a **BUY** limit order (long) with a price in index units (e.g. `price = 25` mm, `quantity = 2`).
 4. Place a **SELL** limit order (short) that can match it (e.g. `price = 25`, `quantity = 2` from another account).
 5. Watch them match and see trades appear; the order book updates remaining size and your positions/balances move accordingly.
@@ -102,13 +95,13 @@ npm run test:coverage   # with coverage report
 
 The suite includes:
 - **Matching engine** (binary): price-time priority, partial fills, market orders
-- **OSS adapter** (futures): side normalization (BUY_YES→bid), partial fill remaining order, multi-counterparty
+- **OSS adapter** (predictions): side normalization (BUY_YES→bid), partial fill remaining order, multi-counterparty
 - **Exchange flow**: remaining order keeps incoming price/side, trade buyer/seller attribution
-- **Futures guard**: futures markets use OSS engine (marketType or indexType)
-- **Order validation**: futures allow price > 1, market order rules
-- **Settlement**: binary/futures payout, zero-sum, applySettlements
+- **Predictions guard**: prediction markets use OSS engine (marketType or indexType)
+- **Order validation**: predictions allow price > 1, market order rules
+- **Settlement**: binary/predictions payout, zero-sum, applySettlements
 - **API**: health, GET /api/markets, GET /api/markets/:id/orders, POST /api/orders validation
-- **Agent Beta**: POST /api/agents (401/201), GET /accounts scoping, paper top-up
+- **Agent Beta**: POST /api/agents (401/201), GET /accounts scoping
 
 ## API Testing with curl (local)
 
@@ -122,11 +115,11 @@ ACCOUNT_ID=$(curl -s -X POST http://localhost:3000/api/accounts \
   ${INVITE_SECRET:+-H \"X-Invite-Code: $INVITE_SECRET\"} \
   -d '{\"balance\": 1000}' | jq -r '.id')
 
-# Get a market ID (first climate futures market)
+# Get a market ID (first climate predictions market)
 MARKET_ID=$(curl -s http://localhost:3000/api/markets \
   ${INVITE_SECRET:+-H \"X-Invite-Code: $INVITE_SECRET\"} | jq -r '.[0].id')
 
-# Place a BUY futures order (long)
+# Place a BUY predictions order (long)
 curl -X POST http://localhost:3000/api/orders \
   -H "Content-Type: application/json" \
   ${INVITE_SECRET:+-H \"X-Invite-Code: $INVITE_SECRET\"} \
@@ -145,5 +138,5 @@ curl -X POST http://localhost:3000/api/orders \
 - **Database connection errors**: Check DATABASE_URL in .env
 - **Prisma errors**: Run `npm run prisma:generate` after schema changes
 - **Port already in use**: Change PORT in .env
-- **Market not found**: Run `npm run seed:bom-weekly` to create climate weekly markets
+- **Market not found**: Run `npm run seed:markets` to create markets
 

@@ -61,11 +61,6 @@ export const agentRateLimitTokensGauge = new Gauge({
   labelNames: ['agentId', 'marketId'],
 });
 
-export const agentLiquidationsTotal = new Counter({
-  name: 'agent_liquidations_total',
-  help: 'Total paper top-ups (liquidations) for agents',
-  labelNames: ['agent_id'],
-});
 
 export const auctionClearingPrice = new Gauge({
   name: 'auction_clearing_price',

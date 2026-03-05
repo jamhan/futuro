@@ -129,7 +129,7 @@ fly deploy -a oraclebook --no-cache
    This stops the API and WebSocket. Existing connections will drop.
 
 2. **Let worker finish** (optional)
-   - Worker continues running (paper topup, oracle ingestion)
+   - Worker continues running (oracle ingestion)
    - Or scale worker to 0: `fly scale count 0 -a oraclebook-worker`
 
 3. **Lock markets** (when server is back)

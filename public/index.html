@@ -251,6 +251,41 @@
       font-size: 1.25rem;
       margin-bottom: var(--space-12);
       font-weight: 600;
+      line-height: 1.3;
+    }
+    .market-detail-description {
+      font-size: 0.875rem;
+      color: var(--color-text-muted);
+      line-height: 1.6;
+      margin-bottom: var(--space-16);
+      padding: var(--space-16);
+      background: var(--color-bg);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--color-border);
+    }
+    .market-detail-description .market-desc-lead {
+      color: var(--color-text);
+      font-weight: 500;
+      margin: 0 0 var(--space-8) 0;
+    }
+    .market-detail-description .market-desc-settlement {
+      margin: 0 0 var(--space-8) 0;
+    }
+    .market-detail-description .market-desc-meta {
+      margin: 0;
+      font-size: 0.8125rem;
+    }
+    .market-detail-description .market-desc-label {
+      font-weight: 600;
+      color: var(--color-text);
+      margin-right: var(--space-8);
+    }
+    .market-detail-description .market-desc-link {
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+    .market-detail-description .market-desc-link:hover {
+      text-decoration: underline;
     }
     .market-detail-grid {
       display: flex;
@@ -268,6 +303,22 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: var(--space-24);
+      flex-wrap: wrap;
+      gap: var(--space-12);
+    }
+    .picker-top-links {
+      display: flex;
+      align-items: center;
+      gap: var(--space-8);
+      font-size: 0.9rem;
+    }
+    .nav-docs-link {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .nav-docs-link:hover {
+      text-decoration: underline;
     }
     .picker-site-title {
       font-size: 1.5rem;
@@ -443,6 +494,23 @@
     .landing-hero {
       text-align: center;
       margin-bottom: var(--space-32);
+      position: relative;
+    }
+    .landing-nav {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      gap: var(--space-16);
+      font-size: 0.9rem;
+    }
+    .landing-docs-link {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .landing-docs-link:hover {
+      text-decoration: underline;
     }
     .landing-title {
       font-family: var(--font-display);

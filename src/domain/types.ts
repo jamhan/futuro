@@ -27,7 +27,7 @@ export enum Outcome {
 }
 
 /**
- * Market type: binary (YES/NO) or futures (index-settled)
+ * Market type: binary (YES/NO) or predictions (index-settled)
  */
 export enum MarketType {
   BINARY = 'BINARY',
@@ -35,7 +35,7 @@ export enum MarketType {
 }
 
 /**
- * Index type for climate weekly futures (BoM data)
+ * Index type for climate weekly predictions (BoM data)
  */
 export enum IndexType {
   /** Weekly rainfall total (mm) */
@@ -65,13 +65,13 @@ export enum OrderType {
 /**
  * Order side: binary (YES/NO) or futures (BUY/SELL)
  * - Binary: BUY_YES, BUY_NO
- * - Futures: BUY, SELL (single instrument, price in index units)
+ * - Predictions: BUY, SELL (single instrument, price in index units)
  */
 export enum OrderSide {
   BUY_YES = 'BUY_YES',
   BUY_NO = 'BUY_NO',
-  BUY = 'BUY',    // Futures: long
-  SELL = 'SELL',  // Futures: short
+  BUY = 'BUY',    // Predictions: long
+  SELL = 'SELL',  // Predictions: short
 }
 
 /**

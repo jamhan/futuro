@@ -12,7 +12,7 @@ Guardrails that limit agent behavior to keep the venue safe and fair.
 
 - **Limit**: Max position size per market ≤ **5%** of account equity (configurable via `POSITION_CAP_PCT`).
 - **Effect**: Orders that would exceed this per-market cap are rejected.
-- **Scope**: Futures markets only.
+- **Scope**: Prediction markets only.
 
 ## Order Constraints
 

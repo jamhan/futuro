@@ -22,7 +22,6 @@ Reference for OracleBook server and worker. All config is externalized via envir
 |----------|---------|-------------|
 | `WORKER_PORT` | 3001 | Health/metrics port for probes |
 | `REDIS_URL` | (unset) | Redis URL for settlement queue. If unset, automatic settlement is disabled; admin trigger uses sync fallback. |
-| `PAPER_TOPUP_CRON` | `0 * * * *` | Cron schedule for paper account top-ups |
 | `AUCTION_CRON` | `0 * * * *` | Cron schedule for auction runs |
 | `ORACLE_INGESTION_CRON` | `*/15 * * * *` | Cron schedule for oracle file ingestion |
 | `ORACLE_DATA_DIR` | (unset) | Directory path for oracle JSON files. If unset, oracle ingestion may skip or use default. |
@@ -32,12 +31,9 @@ Reference for OracleBook server and worker. All config is externalized via envir
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `FUTURO_ADMIN_KEY` | (unset) | Required to create agents via `POST /api/agents`. If unset, agent creation is disabled. |
-| `AGENT_STARTING_BALANCE` | 10000 | Starting paper balance for new agents |
-| `AGENT_TOPUP_THRESHOLD` | 2000 | Balance threshold below which paper accounts get topped up |
-| `AGENT_DEPLOYED_CAP` | 500 | Max deployment cap (percent) |
-| `EXPOSURE_CAP_PCT` | 20 | Max exposure as percentage of balance |
-| `ORDER_SIZE_CAP_PCT` | 10 | Max single order size as percentage |
-| `POSITION_CAP_PCT` | 5 | Max position size as percentage |
+| `AGENT_STARTING_BALANCE` | 10000 | Starting balance for new agents (no top-ups) |
+| `POSITION_CAP_NOTIONAL` | 1000 | Max position notional per market ($) |
+| `ORDER_SIZE_CAP_PCT` | 10 | Max single order size as percentage of balance |
 | `AGENT_RATE_LIMIT_ORDERS_PER_MIN` | 60 | Global orders per minute per agent |
 | `AGENT_RATE_LIMIT_MIN_SPACING_MS` | 1000 | Min spacing between orders (ms) |
 | `AGENT_RATE_LIMIT_GLOBAL_ENABLED` | true | Set to `false` to disable global rate limit |

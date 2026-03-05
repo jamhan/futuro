@@ -696,8 +696,9 @@ describe('API', () => {
           type: 'LIMIT',
           price: 0.5,
           quantity: 10,
+          reasonForTrade: { reason: 'test', theoreticalPriceMethod: 'na' },
         });
-      const orderId = orderRes.body.order.id;
+      const orderId = orderRes.body.order?.id ?? orderRes.body.id;
 
       const cancelRes = await request(app)
         .delete(`/api/orders/${orderId}`)

@@ -1,11 +1,10 @@
 /**
- * Worker process: runs cron jobs (paper top-up, auction, oracle ingestion, settlement).
+ * Worker process: runs cron jobs (auction, oracle ingestion, settlement).
  * Separate from the app server to isolate heavy work and keep the API responsive.
  * Exposes /health, /healthz (liveness) and /readyz (readiness) for probes.
  */
 
 import http from 'http';
-import { startPaperTopupCron } from './jobs/paperTopupCron';
 import { startAuctionCron } from './jobs/auctionCron';
 import { startOracleIngestionCron } from './jobs/oracleIngestionCron';
 import { startSettlementCron } from './jobs/settlementCron';
@@ -49,7 +48,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Start cron jobs
-startPaperTopupCron();
 startAuctionCron();
 startOracleIngestionCron();
 

@@ -11,9 +11,9 @@ OracleBook runs **two processes**:
 | Process | Purpose | Port |
 |---------|---------|------|
 | **Server** | API, WebSocket, orders | `PORT` (default 3000) |
-| **Worker** | Cron jobs: paper top-up, auction, oracle ingestion | `WORKER_PORT` (default 3001) |
+| **Worker** | Cron jobs: auction, oracle ingestion | `WORKER_PORT` (default 3001) |
 
-**Why separate?** Heavy jobs (auction, paper top-up, oracle ingestion) run in the worker so the API stays responsive under load. Jobs use PostgreSQL advisory locks to prevent duplicate execution if multiple workers run.
+**Why separate?** Heavy jobs (auction, oracle ingestion) run in the worker so the API stays responsive under load. Jobs use PostgreSQL advisory locks to prevent duplicate execution if multiple workers run.
 
 **Restart strategy:**
 - **Kubernetes**: Liveness probe `GET /health` (server) or `GET http://worker:3001/health` (worker). Failed probe restarts the pod.
@@ -72,7 +72,7 @@ After the first successful deploy, run the seed once (e.g. from your machine wit
 # Use the DATABASE_URL from Railway (copy from Variables tab)
 export DATABASE_URL="postgresql://..."
 npm run prisma:seed
-npm run seed:bom-weekly
+npm run seed:markets
 ```
 
 Or use **Railway CLI** and run the same commands in a shell that has `DATABASE_URL` set.
@@ -92,7 +92,7 @@ Or use **Railway CLI** and run the same commands in a shell that has `DATABASE_U
 4. Deploy, then seed (via Render shell or local with production `DATABASE_URL`):
 
    ```bash
-   npm run prisma:seed && npm run seed:bom-weekly
+   npm run prisma:seed && npm run seed:markets
    ```
 
 ---
@@ -142,7 +142,7 @@ To disable invite-only, remove or leave `INVITE_SECRET` unset.
 ## Checklist before going live
 
 - [ ] `DATABASE_URL` set and migrations run (`prisma migrate deploy`).
-- [ ] Markets and test accounts seeded (`prisma:seed`, `seed:bom-weekly`).
+- [ ] Markets and test accounts seeded (`prisma:seed`, `seed:markets`).
 - [ ] Both **server** and **worker** processes deployed and running.
 - [ ] Worker health: `curl http://localhost:3001/health` returns `{"status":"ok"}`.
 - [ ] Env parity: `./scripts/check-env.sh` passes for both services.

@@ -24,7 +24,7 @@ The database starts empty. Seed from your local machine with the production `DAT
 
 export DATABASE_URL="postgresql://..."   # your production connection string
 npm run prisma:seed
-npm run seed:bom-weekly
+npm run seed:markets
 ```
 
-After seeding, refresh the web UI—markets should appear.
+This creates weather (BOM) and AEMO electricity markets: next 2 days, 2 weekly averages, 2 monthly averages. After seeding, refresh the web UI—markets should appear.

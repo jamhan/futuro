@@ -1,6 +1,6 @@
-# Futuro Rainfall Futures Exchange
+# Futuro Rainfall Predictions Exchange
 
-A regulated-style derivatives exchange MVP for cash-settled linear rainfall futures.
+A regulated-style derivatives exchange MVP for cash-settled linear rainfall predictions.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ This is an event-sourced exchange system built with:
 
 ### Instrument Definition
 
-- **Product**: Linear rainfall futures
+- **Product**: Linear rainfall predictions
 - **Underlying**: Monthly total rainfall (mm)
 - **Data Source**: Bureau of Meteorology CSV
 - **Settlement**: Cash
@@ -104,7 +104,7 @@ Run integration tests:
 ./gradlew test
 ```
 
-The integration test simulates two participants trading rainfall futures:
+The integration test simulates two participants trading rainfall predictions:
 1. Account 1 buys 10 contracts at 95mm
 2. Account 2 sells 10 contracts at 95mm (matches)
 3. Index value updates to 105mm

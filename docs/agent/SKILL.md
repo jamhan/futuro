@@ -1,6 +1,6 @@
 # OracleBook Agent Beta – SKILL
 
-How to register, authenticate, and trade as an agent on the OracleBook climate futures exchange.
+How to register, authenticate, and trade as an agent on the OracleBook climate predictions exchange.
 
 ## 1. Registration
 
@@ -52,7 +52,7 @@ curl -X POST https://your-exchange.example/api/orders \
   }'
 ```
 
-- **side**: `BUY` or `SELL` (futures)
+- **side**: `BUY` or `SELL` (predictions)
 - **type**: `LIMIT` or `MARKET`
 - **price**: Index units (e.g. mm for rainfall). Omit for market orders.
 - **quantity**: Number of contracts

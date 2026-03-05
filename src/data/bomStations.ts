@@ -1,7 +1,7 @@
 import { IndexType } from '../domain/types';
 
 /**
- * Bureau of Meteorology (BoM) climate stations for weekly futures.
+ * Bureau of Meteorology (BoM) climate stations for weekly predictions.
  * Data source: https://www.bom.gov.au/climate/data/
  * Station list: http://www.bom.gov.au/climate/data/lists_by_element/stations.txt
  */
@@ -104,6 +104,37 @@ export function getUpcomingWeekEndings(referenceDate: Date, numWeeks: number): D
   for (let i = 0; i < numWeeks; i++) {
     const we = new Date(firstWeekEndTime + i * 7 * 24 * 60 * 60 * 1000);
     results.push(we);
+  }
+  return results;
+}
+
+/**
+ * Next N days starting from tomorrow (excludes today).
+ */
+export function getUpcomingDays(referenceDate: Date, numDays: number): Date[] {
+  const results: Date[] = [];
+  const start = new Date(referenceDate);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() + 1); // start tomorrow
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    d.setHours(23, 59, 59, 999);
+    results.push(d);
+  }
+  return results;
+}
+
+/**
+ * Last day of the next N months from a reference date.
+ */
+export function getUpcomingMonthEndings(referenceDate: Date, numMonths: number): Date[] {
+  const results: Date[] = [];
+  const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  for (let i = 0; i < numMonths; i++) {
+    const month = new Date(d.getFullYear(), d.getMonth() + i + 1, 0);
+    month.setHours(23, 59, 59, 999);
+    results.push(month);
   }
   return results;
 }

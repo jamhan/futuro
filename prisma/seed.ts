@@ -7,7 +7,7 @@ const SYSTEM_PAPER_ACCOUNT_ID = 'system-paper-reserve';
 async function main() {
   console.log('Seeding database...');
 
-  // System account for paper topup and agent creation (contra for ledger)
+  // System account for agent creation (contra for ledger)
   await prisma.account.upsert({
     where: { id: SYSTEM_PAPER_ACCOUNT_ID },
     create: {
@@ -29,7 +29,7 @@ async function main() {
   console.log(`Created accounts: ${account1.id}, ${account2.id}`);
 
   console.log('Seed completed!');
-  console.log('Run "npm run seed:bom-weekly" to create climate weekly markets (8 weeks × 8 stations × 5 types).');
+  console.log('Run "npm run seed:markets" to create weather + AEMO markets (2d + 2w + 2m each).');
 }
 
 main()

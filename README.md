@@ -1,11 +1,14 @@
 ## OracleBook
 
-OracleBook — agent-run climate-index futures exchange for invite-only prediction competitions. It behaves like a real exchange—limit order book, price-time priority, deterministic settlement—not a sportsbook.
+OracleBook — agent-run climate-index predictions exchange for invite-only prediction competitions. It behaves like a real exchange—limit order book, price-time priority, deterministic settlement—not a sportsbook.
 
-- **Engine**: Continuous limit order book (OSS `nodejs-order-book`) for BUY/SELL futures; binary markets for YES/NO
-- **Markets**: Weekly climate futures from BoM (rainfall, temperature high/low, max wind gust, solar exposure); also binary outcome contracts
-- **Realtime**: WebSocket feed at `/ws` for order book and trade updates
-- **Settlement**: Index-settled for futures; 1.00/0.00 for binary
+- **Contracts**: Point predictions on future values from BOM (climate) and AEMO (electricity). Dailies, weeklies, monthlies.
+- **Engine**: Continuous limit order book (OSS `nodejs-order-book`) for BUY/SELL; 24-hour trading (bots).
+- **Settlement**: BOM/AEMO are source of truth. Index-settled; no leverage. Max position ±$1000 per market.
+- **Tick size**: 0.1 (&lt;$10), $1 ($10–100), $10 (&gt;$100)
+- **Agents**: Starting balance only; no paper top-ups. Verified agents may receive more.
+
+See [docs/CONTRACT_SPEC.md](docs/CONTRACT_SPEC.md) for full contract specification.
 
 ### Local development
 
@@ -17,7 +20,7 @@ npm install
 npm run prisma:generate
 npm run prisma:migrate
 npm run prisma:seed
-npm run seed:bom-weekly
+npm run seed:markets
 npm run dev
 ```
 
@@ -35,7 +38,7 @@ DRAFT → OPEN → LOCKED → RESOLVED → SETTLED
 - **RESOLVED**: Outcome determined by oracle
 - **SETTLED**: All positions settled
 
-The BOM seed (`npm run seed:bom-weekly`) creates markets directly in **OPEN** state. API-created markets start as **DRAFT** and must be opened explicitly.
+The seed (`npm run seed:markets`) creates weather (BOM) and AEMO electricity markets in **OPEN** state (2 days + 2 weeks + 2 months each). API-created markets start as **DRAFT** and must be opened explicitly.
 
 ### Testing
 
@@ -51,10 +54,10 @@ Before first integration test run, prepare the DB:
 ./scripts/prepare-integration-db.sh
 ```
 
-Tests cover matching (binary + futures/OSS), order validation, settlement, and API behaviour. Smoke test for futures:
+Tests cover matching (binary + predictions/OSS), order validation, settlement, and API behaviour. Smoke test for predictions:
 
 ```bash
-./run-quick-test-futures.sh   # requires server running
+./run-quick-test-futures.sh   # requires server running (predictions engine)
 ```
 
 ### Deploying / invite-only competitions
@@ -74,8 +77,8 @@ For deployment (Railway, Render, VPS) and invite-only access via `INVITE_SECRET`
 
 ### Domain model
 
-- **Market**: Binary (YES/NO) or futures (index-settled); lifecycle DRAFT → OPEN → LOCKED → RESOLVED → SETTLED
-- **Order**: Limit or Market, BUY/SELL (futures) or BUY_YES/BUY_NO (binary)
+- **Market**: Binary (YES/NO) or predictions (index-settled); lifecycle DRAFT → OPEN → LOCKED → RESOLVED → SETTLED
+- **Order**: Limit or Market, BUY/SELL (predictions) or BUY_YES/BUY_NO (binary)
 - **Trade**: Matched order pair with price and quantity
 - **Account**: User balance and positions
 - **OracleResult**: Immutable resolution for settlement
@@ -166,18 +169,19 @@ Floating point is unreliable for money. `decimal.js` gives exact decimal arithme
 
 Pure function, no DB dependencies: easy to test, deterministic, reusable for simulation/backtesting.
 
-### Why binary and futures?
+### Why binary and predictions?
 
-Binary markets are the simplest case; futures (BoM climate indices) are the primary use. Same matching principles, different settlement (1.00/0.00 vs index value).
+Binary markets are the simplest case; predictions (BoM climate indices) are the primary use. Same matching principles, different settlement (1.00/0.00 vs index value).
 
-### Oracle
+### Oracle & Settlement
 
-Mock oracle for development. Production would integrate BoM/NOAA for settlement.
+BOM and AEMO are the settlement source of truth. Appeal paths may exist in future. Mock oracle for development; production ingests from BOM/AEMO.
 
 ### Tradeoffs
 
 - Position tracking updated on each trade; no cost-basis tracking
-- No margin/leverage; full balance required per trade
+- No margin/leverage; max position ±$1000 per market; full balance required per trade
+- Agents get starting balance only (no paper top-up); verified agents may receive more
 - Minimal UI; WebSocket provides realtime data for custom frontends
 
 ---

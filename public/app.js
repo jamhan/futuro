@@ -343,10 +343,7 @@ function renderLanding() {
   const cards = state.previewMarkets.map(({ market, price }) => {
     const unit = INDEX_TYPE_UNITS[market.indexType] || '';
     const typeLabel = INDEX_TYPE_LABELS[market.indexType] || market.indexType || 'Market';
-    const dateStr = market.eventDate
-      ? new Date(market.eventDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
-      : '';
-    const label = market.indexType === 'dispatch_daily_rrp' ? dateStr : `Week ending ${dateStr}`;
+    const label = getMarketPeriodLabel(market);
     const priceStr = price != null ? `${price} ${unit}`.trim() : '—';
     return `
       <a href="?market=${market.id}" class="market-preview-card">
@@ -363,11 +360,16 @@ function renderLanding() {
     const pnlClass = pnl >= 0 ? 'leaderboard-pnl-up' : 'leaderboard-pnl-down';
     return `<div class="leaderboard-row"><span class="leaderboard-rank">#${i + 1}</span><span class="leaderboard-name">${escapeHtml(a.agentName || 'Agent')}</span><span class="leaderboard-pnl ${pnlClass}">${pnlStr}</span></div>`;
   });
+  const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
   root.innerHTML = `
     <div class="landing">
       <div class="landing-hero">
+        <div class="landing-nav">
+          <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="landing-docs-link">Docs</a>
+          <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="landing-docs-link">oraclebook.xyz</a>
+        </div>
         <h1 class="landing-title">OracleBook</h1>
-        <p class="landing-tagline">Agent-run climate futures. Humans observe.</p>
+        <p class="landing-tagline">Agent-run climate predictions. Humans observe.</p>
         <div class="landing-pills">
           <button type="button" class="entry-pill entry-pill-human" onclick="setUserMode('observer')">
             <span class="entry-pill-icon">Human</span>
@@ -434,6 +436,47 @@ function getCategory(indexType) {
   return ENERGY_INDEX_TYPES.includes(indexType || '') ? 'energy' : 'weather';
 }
 
+/** Format long market description into styled HTML (lead, settlement, resolution, data) */
+function formatMarketDescription(desc) {
+  if (!desc || typeof desc !== 'string') return '';
+  const parts = desc.split('. ').filter(Boolean);
+  if (parts.length === 0) return escapeHtml(desc);
+  const lead = parts[0];
+  const settlement = parts.find(p => p.startsWith('Settles to'));
+  const resolution = parts.find(p => p.startsWith('Resolution:'));
+  const data = parts.find(p => p.startsWith('Data:'));
+  let html = `<p class="market-desc-lead">${escapeHtml(lead)}</p>`;
+  if (settlement) html += `<p class="market-desc-settlement">${escapeHtml(settlement)}</p>`;
+  if (resolution) html += `<p class="market-desc-meta"><span class="market-desc-label">Resolution</span> ${escapeHtml(resolution.replace(/^Resolution:\s*/i, ''))}</p>`;
+  if (data) {
+    const dataText = data.replace(/^Data:\s*/i, '');
+    const urlMatch = dataText.match(/https?:\/\/[^\s)]+/);
+    const linked = urlMatch
+      ? escapeHtml(dataText.slice(0, dataText.indexOf(urlMatch[0]))) +
+        `<a href="${escapeHtml(urlMatch[0])}" target="_blank" rel="noopener" class="market-desc-link">${escapeHtml(urlMatch[0])}</a>` +
+        escapeHtml(dataText.slice(dataText.indexOf(urlMatch[0]) + urlMatch[0].length))
+      : escapeHtml(dataText);
+    html += `<p class="market-desc-meta"><span class="market-desc-label">Data</span> ${linked}</p>`;
+  }
+  return html || escapeHtml(desc);
+}
+
+/** Derive period label from market (condition or indexId): Day ending / Week ending / Month ending */
+function getMarketPeriodLabel(market) {
+  if (!market.eventDate) return '';
+  const d = new Date(market.eventDate);
+  const cond = (market.condition || '').toLowerCase();
+  const idx = (market.indexId || '').toLowerCase();
+  const dateStr = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+  const monthYearStr = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+  if (cond.startsWith('daily_') || idx.includes('_daily_')) return `Day ending ${dateStr}`;
+  if (cond.startsWith('monthly_') || idx.includes('_monthly_')) return `Month ending ${monthYearStr}`;
+  if (cond.startsWith('weekly_') || idx.includes('_weekly_')) return `Week ending ${dateStr}`;
+  if (market.indexType !== 'dispatch_daily_rrp' && idx.match(/\d{4}-\d{2}-\d{2}$/) && !idx.includes('_daily_') && !idx.includes('_monthly_')) return `Week ending ${dateStr}`;
+  if (market.indexType === 'dispatch_daily_rrp' && !idx.includes('_weekly_') && !idx.includes('_monthly_')) return `Day ending ${dateStr}`;
+  return dateStr;
+}
+
 // Tab labels for climate index types
 const INDEX_TYPE_LABELS = {
   weather_rainfall: 'Rainfall (mm)',
@@ -445,7 +488,7 @@ const INDEX_TYPE_LABELS = {
   dispatch_daily_rrp: 'Daily avg RRP ($/MWh)',
 };
 
-// Price unit for order form (futures: price in index units)
+// Price unit for order form (predictions: price in index units)
 const INDEX_TYPE_UNITS = {
   weather_rainfall: 'mm',
   temperature_high: '°C',
@@ -488,8 +531,7 @@ function renderStationGrid(stations) {
             <h4>${loc}</h4>
             <div class="station-links">
               ${list.map(m => {
-                const dateStr = m.eventDate ? new Date(m.eventDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-                const label = m.indexType === 'dispatch_daily_rrp' ? dateStr : `Week ending ${dateStr}`;
+                const label = getMarketPeriodLabel(m) || '—';
                 return `<a href="?market=${m.id}">${label}</a>`;
               }).join('')}
             </div>
@@ -514,6 +556,7 @@ function renderMarketPicker(markets) {
   const firstEnergyType = allEnergyTypes[0] || null;
   const firstWeatherType = allWeatherTypes[0] || null;
 
+  const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
   const observerLinks =
     state.userMode === 'observer'
       ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a> <span class="picker-sep">|</span> <a href="#" onclick="state.userMode=\'trader\'; localStorage.setItem(\'userMode\',\'trader\'); renderApp(); return false;" class="switch-mode-link">Create account to trade</a>'
@@ -521,11 +564,16 @@ function renderMarketPicker(markets) {
   let html = `
     <div class="picker-top">
       <h1 class="picker-site-title">OracleBook</h1>
-      ${observerLinks}
+      <div class="picker-top-links">
+        <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
+        <span class="picker-sep">|</span>
+        <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="nav-docs-link">oraclebook.xyz</a>
+        ${observerLinks ? `<span class="picker-sep">|</span> ${observerLinks}` : ''}
+      </div>
     </div>
     <div class="market-info picker-header">
       <h2>Select a market</h2>
-      <p style="margin-bottom: 0; color: #666;">Choose by category, type, then station and week.</p>
+      <p style="margin-bottom: 0; color: #666;">Choose by category, type, location and period.</p>
     </div>
     <div class="picker-category-tabs">
       ${allEnergyTypes.length > 0 ? `
@@ -693,17 +741,22 @@ function renderApp() {
   const priceNum = (o) => (o.price != null ? Number(o.price) : null);
 
   const eventDateStr = new Date(state.market.eventDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const periodLabel = getMarketPeriodLabel(state.market);
+  const typeLabel = INDEX_TYPE_LABELS[state.market.indexType] || state.market.indexType || '';
+  const shortTitle = `${state.market.location}: ${typeLabel} · ${periodLabel}`;
+  const descriptionHtml = formatMarketDescription(state.market.description);
   root.innerHTML = `
     <div class="market-detail-header">
-      <a href="?" class="back-link">&larr; All markets</a>
-      <div class="market-detail-meta">
-        <h2 class="market-detail-title">${state.market.description}</h2>
-        <div class="market-detail-grid">
-          <span class="market-detail-item"><strong>Location</strong> ${state.market.location}</span>
-          <span class="market-detail-item"><strong>Event</strong> ${eventDateStr}</span>
-          <span class="market-detail-item"><strong>State</strong> ${state.market.state}</span>
-          ${state.account ? `<span class="market-detail-item market-detail-balance"><strong>Balance</strong> $${state.account.balance}</span>` : ''}
-        </div>
+      <div class="market-detail-nav">
+        <a href="?" class="back-link">&larr; All markets</a>
+        <a href="/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
+      </div>
+      <h2 class="market-detail-title">${escapeHtml(shortTitle)}</h2>
+      <div class="market-detail-description">${descriptionHtml}</div>
+      <div class="market-detail-grid">
+        <span class="market-detail-item"><strong>Event</strong> ${eventDateStr}</span>
+        <span class="market-detail-item"><strong>State</strong> ${state.market.state}</span>
+        ${state.account ? `<span class="market-detail-item market-detail-balance"><strong>Balance</strong> $${state.account.balance}</span>` : ''}
       </div>
     </div>
     

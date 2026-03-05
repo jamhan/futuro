@@ -1,6 +1,6 @@
 # Oracle Data
 
-This directory stores oracle observation files ingested from BOM (Bureau of Meteorology) and AEMO (energy dispatch) sources. The oracle ingestor reads these files and writes values to `OracleObservation`, then triggers resolve for LOCKED futures markets.
+This directory stores oracle observation files ingested from BOM (Bureau of Meteorology) and AEMO (energy dispatch) sources. The oracle ingestor reads these files and writes values to `OracleObservation`, then triggers resolve for LOCKED prediction markets.
 
 ## Week Definition (OracleBook Markets)
 
@@ -96,11 +96,11 @@ npx tsx scripts/fetch-dispatch-price.ts \
 
 ### Daily Average RRP (agents can bet on this)
 
-Creates one oracle file per region with the arithmetic mean of 288 five-minute RRPs for the day. Agents trade via `X-Agent-Key` on markets seeded with `npm run seed:aemo-daily-rrp`.
+Creates one oracle file per region with the arithmetic mean of 288 five-minute RRPs for the day. Agents trade via `X-Agent-Key` on markets seeded with `npm run seed:markets` or `npm run seed:aemo-daily-rrp`.
 
 ```bash
-# 1. Seed markets (additive - does not clear BOM markets)
-npm run seed:aemo-daily-rrp
+# 1. Seed markets (seed:markets creates all; seed:aemo-daily-rrp is additive only)
+npm run seed:markets
 
 # 2. Fetch daily average (provide zip(s) covering the full day from Dispatch_Reports or Archive)
 npx tsx scripts/fetch-daily-rrp.ts \

@@ -22,6 +22,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "seed:markets": "tsx scripts/seed-markets.ts",
     "seed:bom-weekly": "tsx scripts/seed-bom-weekly.ts",
     "seed:aemo-daily-rrp": "tsx scripts/seed-aemo-daily-rrp.ts",
     "fetch:bom": "tsx scripts/fetch-bom.ts",
