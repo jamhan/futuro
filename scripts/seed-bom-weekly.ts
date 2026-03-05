@@ -55,9 +55,9 @@ async function main() {
   for (const station of BOM_RAINFALL_STATIONS) {
     for (const weekEnd of weekEndings) {
       const weekEndStr = formatDateKey(weekEnd);
-      for (const { indexType, label, unit } of CLIMATE_WEEKLY_INDEX_TYPES) {
+      for (const { indexType, label, unit, definition } of CLIMATE_WEEKLY_INDEX_TYPES) {
         const indexId = `${station.id}_${indexType}_${weekEndStr}`;
-        const description = `${station.name} weekly ${label} (${unit}) week ending ${weekEndStr}`;
+        const description = `${station.location}: ${definition} (${unit}), week ending ${weekEndStr}`;
 
         const bounds = PRICE_BOUNDS[indexType] ?? { min: 0, max: 1000 };
         const contractMultiplier = CONTRACT_MULTIPLIERS[indexType] ?? 1;

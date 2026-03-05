@@ -93,7 +93,7 @@ if (require.main === module) {
     registerWsClient(ws);
   });
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`OracleBook API running on port ${PORT}`);
     console.log(`UI available at http://localhost:${PORT}`);
     console.log(`WebSocket feed at ws://localhost:${PORT}/ws`);

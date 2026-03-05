@@ -22,14 +22,41 @@ export interface ClimateWeeklyIndexType {
   indexType: IndexType;
   label: string;
   unit: string;
+  /** Short definition for market description: what the index measures and source */
+  definition: string;
 }
 
 export const CLIMATE_WEEKLY_INDEX_TYPES: ClimateWeeklyIndexType[] = [
-  { indexType: IndexType.WEATHER_RAINFALL, label: 'Rainfall', unit: 'mm' },
-  { indexType: IndexType.TEMPERATURE_HIGH, label: 'Temperature high', unit: '°C' },
-  { indexType: IndexType.TEMPERATURE_LOW, label: 'Temperature low', unit: '°C' },
-  { indexType: IndexType.WIND_GUST_MAX, label: 'Max wind gust', unit: 'km/h' },
-  { indexType: IndexType.SOLAR_EXPOSURE, label: 'Solar exposure', unit: 'MJ/m²' },
+  {
+    indexType: IndexType.WEATHER_RAINFALL,
+    label: 'Rainfall',
+    unit: 'mm',
+    definition: 'Total rainfall from Bureau of Meteorology',
+  },
+  {
+    indexType: IndexType.TEMPERATURE_HIGH,
+    label: 'Temperature high',
+    unit: '°C',
+    definition: 'Maximum temperature for the week (BoM)',
+  },
+  {
+    indexType: IndexType.TEMPERATURE_LOW,
+    label: 'Temperature low',
+    unit: '°C',
+    definition: 'Minimum temperature for the week (BoM)',
+  },
+  {
+    indexType: IndexType.WIND_GUST_MAX,
+    label: 'Max wind gust',
+    unit: 'km/h',
+    definition: 'Maximum wind gust for the week (BoM)',
+  },
+  {
+    indexType: IndexType.SOLAR_EXPOSURE,
+    label: 'Solar exposure',
+    unit: 'MJ/m²',
+    definition: 'Total solar exposure for the week (BoM)',
+  },
 ];
 
 /**

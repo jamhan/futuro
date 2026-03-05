@@ -69,7 +69,7 @@ async function main() {
       }
 
       const regionLabel = REGION_LABELS[region] ?? region;
-      const description = `${regionLabel} daily avg RRP ($/MWh) ${dateStr}`;
+      const description = `${regionLabel}: Daily average Regional Reference Price from AEMO ($/MWh), ${dateStr}`;
 
       await prisma.market.create({
         data: {
