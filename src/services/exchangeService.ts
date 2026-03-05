@@ -220,6 +220,7 @@ export class ExchangeService {
           quantity: new Prisma.Decimal(orderToSave.quantity.toString()),
           filledQuantity: new Prisma.Decimal(orderToSave.filledQuantity.toString()),
           status: orderToSave.status,
+          reasonForTrade: (input.reasonForTrade ?? undefined) as Prisma.InputJsonValue | undefined,
         },
       });
       const savedOrder: Order = {
@@ -241,6 +242,7 @@ export class ExchangeService {
             price: new Prisma.Decimal(t.price.toString()),
             quantity: new Prisma.Decimal(t.quantity.toString()),
             buyerSide: t.buyerSide,
+            takerReasonForTrade: (input.reasonForTrade ?? undefined) as Prisma.InputJsonValue | undefined,
             createdAt: t.createdAt,
           })),
         });

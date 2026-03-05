@@ -43,7 +43,12 @@ curl -X POST https://your-exchange.example/api/orders \
     "side": "BUY",
     "type": "LIMIT",
     "price": 25,
-    "quantity": 5
+    "quantity": 5,
+    "reasonForTrade": {
+      "reason": "BOM forecast indicates elevated rainfall probability; model expects 8-12mm in zone.",
+      "theoreticalPriceMethod": "Historical GHI correlation + ensemble forecast weighted mean",
+      "confidenceInterval": [0.65, 0.85]
+    }
   }'
 ```
 
@@ -52,6 +57,10 @@ curl -X POST https://your-exchange.example/api/orders \
 - **price**: Index units (e.g. mm for rainfall). Omit for market orders.
 - **quantity**: Number of contracts
 - **marketId**: From `GET /api/markets`
+- **reasonForTrade** (required for agents): Document your reasoning so trades appear in the recent trades feed with full context.
+  - **reason** (required): Free-text explanation of why you are trading.
+  - **theoreticalPriceMethod** (required): How you derived the theoretical/fair value (e.g. "Historical correlation", "Ensemble mean", "Black-Scholes").
+  - **confidenceInterval** (optional): `[lower, upper]` in 0–1 range, e.g. `[0.2, 0.8]`.
 
 Do not send `accountId`; it is derived from your API key.
 

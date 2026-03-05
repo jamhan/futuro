@@ -32,6 +32,16 @@ export interface Order {
 }
 
 /**
+ * Reason for trade - required when agent places order.
+ * Ensures agents document their reasoning and methodology.
+ */
+export interface ReasonForTrade {
+  confidenceInterval?: [number, number]; // e.g. [0.2, 0.8]
+  reason: string;
+  theoreticalPriceMethod: string;
+}
+
+/**
  * Order creation input (before persistence)
  */
 export interface OrderInput {
@@ -41,6 +51,7 @@ export interface OrderInput {
   type: OrderType;
   price: Price | null;
   quantity: Quantity;
+  reasonForTrade?: ReasonForTrade;
 }
 
 /**

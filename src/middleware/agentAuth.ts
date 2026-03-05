@@ -56,6 +56,15 @@ export async function agentAuthMiddleware(
   }
 
   // Fallback: legacy agents without apiKeyLookup (small set, shrinks over time)
+  // Short-circuit when none exist — avoids O(n) bcrypt for invalid keys
+  const legacyCount = await prisma.agentProfile.count({
+    where: { status: 'ACTIVE', apiKeyLookup: null },
+  });
+  if (legacyCount === 0) {
+    res.status(401).json({ error: 'Invalid agent API key', code: 'INVALID_AGENT_KEY' });
+    return;
+  }
+
   const legacyProfiles = await prisma.agentProfile.findMany({
     where: { status: 'ACTIVE', apiKeyLookup: null },
     include: { account: true },
@@ -63,6 +72,11 @@ export async function agentAuthMiddleware(
 
   for (const profile of legacyProfiles) {
     if (await bcrypt.compare(key, profile.apiKeyHash)) {
+      // Migrate to apiKeyLookup so future auth uses fast path
+      await prisma.agentProfile.update({
+        where: { id: profile.id },
+        data: { apiKeyLookup: lookup },
+      }).catch(() => { /* ignore update failure, auth still succeeds */ });
       req.agent = {
         id: profile.id,
         name: profile.name,

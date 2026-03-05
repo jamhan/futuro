@@ -9,6 +9,12 @@ import { setNowFn, resetNowFn, clearBuckets } from '../../src/lib/rateLimit/toke
 const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY || 'test-admin-key';
 const prisma = getPrismaClient();
 
+const REASON_FOR_TRADE = {
+  reason: 'Integration test order',
+  theoreticalPriceMethod: 'Test',
+  confidenceInterval: [0.5, 0.7] as [number, number],
+};
+
 async function promoteAgentToTrusted(accountId: string): Promise<void> {
   const profile = await prisma.agentProfile.findFirst({
     where: { accountId },
@@ -299,6 +305,7 @@ describe('API', () => {
           type: 'LIMIT',
           price: 0.5,
           quantity: 5,
+          reasonForTrade: REASON_FOR_TRADE,
         });
 
       expect(orderRes.status).toBe(403);
@@ -331,7 +338,7 @@ describe('API', () => {
         .post('/api/orders')
         .set('Content-Type', 'application/json')
         .set('X-Agent-Key', agentKey)
-        .send({ marketId, side: 'BUY_YES', type: 'LIMIT', price: 0.5, quantity: 5 });
+        .send({ marketId, side: 'BUY_YES', type: 'LIMIT', price: 0.5, quantity: 5, reasonForTrade: REASON_FOR_TRADE });
       expect(orderBeforePromote.status).toBe(403);
 
       await promoteAgentToTrusted(accountId);
@@ -343,7 +350,7 @@ describe('API', () => {
         .post('/api/orders')
         .set('Content-Type', 'application/json')
         .set('X-Agent-Key', agentKey)
-        .send({ marketId, side: 'BUY_YES', type: 'LIMIT', price: 0.5, quantity: 5 });
+        .send({ marketId, side: 'BUY_YES', type: 'LIMIT', price: 0.5, quantity: 5, reasonForTrade: REASON_FOR_TRADE });
       expect(orderAfterPromote.status).toBe(201);
       expect(orderAfterPromote.body.order.accountId).toBe(accountId);
     });
@@ -360,6 +367,38 @@ describe('API', () => {
           quantity: 5,
         });
       expect(res.status).toBe(400);
+    });
+
+    it('returns 400 when agent omits reasonForTrade', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'no-reason-agent' });
+      const agentKey = agentRes.body.apiKey;
+      await promoteAgentToTrusted(agentRes.body.accountId);
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Test no reason',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      const orderRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({ marketId, side: 'BUY_YES', type: 'LIMIT', price: 0.5, quantity: 5 });
+
+      expect(orderRes.status).toBe(400);
+      expect(orderRes.body.code).toBe('REASON_FOR_TRADE_REQUIRED');
     });
 
     it('places order using X-Agent-Key (no accountId in body)', async () => {
@@ -398,6 +437,7 @@ describe('API', () => {
           type: 'LIMIT',
           price: 0.5,
           quantity: 5,
+          reasonForTrade: REASON_FOR_TRADE,
         });
 
       expect(orderRes.status).toBe(201);
@@ -440,6 +480,7 @@ describe('API', () => {
           type: 'LIMIT' as const,
           price: 0.5,
           quantity: 5,
+          reasonForTrade: REASON_FOR_TRADE,
         };
 
         const first = await request(app)
@@ -516,6 +557,7 @@ describe('API', () => {
           type: 'LIMIT',
           price: 0.5,
           quantity: 5,
+          reasonForTrade: REASON_FOR_TRADE,
         });
 
       expect(orderRes.status).toBe(403);
@@ -601,6 +643,7 @@ describe('API', () => {
           type: 'LIMIT',
           price: 0.5,
           quantity: 10,
+          reasonForTrade: REASON_FOR_TRADE,
         });
       const orderId = orderRes.body.order?.id ?? orderRes.body.id;
 
@@ -666,7 +709,6 @@ describe('API', () => {
   });
 
   describe('Agent auth: invalid key', () => {
-    jest.setTimeout(30000); // Legacy fallback can be slow when many pre-migration agents exist
     it('returns 401 for invalid X-Agent-Key', async () => {
       const res = await request(app)
         .get('/api/accounts/some-account-id')

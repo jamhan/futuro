@@ -11,14 +11,17 @@ import {
 
 export type { TradeId, OrderId, MarketId, AccountId };
 
+import type { ReasonForTrade } from './order';
+
 /**
  * Trade represents a matched order pair
- * 
+ *
  * Each trade has:
  * - A buyer (buying YES or NO)
  * - A seller (selling YES or NO)
  * - A price and quantity
  * - Timestamp
+ * - takerReasonForTrade: reasoning from the incoming (taker) order, when present
  */
 export interface Trade {
   id: TradeId;
@@ -30,6 +33,7 @@ export interface Trade {
   price: Price;
   quantity: Quantity;
   buyerSide: OrderSide; // What the buyer is buying (YES or NO)
+  takerReasonForTrade?: ReasonForTrade | null;
   createdAt: Date;
 }
 

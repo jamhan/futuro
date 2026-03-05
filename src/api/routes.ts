@@ -45,6 +45,12 @@ const createMarketSchema = z.object({
   indexId: z.string().optional(),
 });
 
+const reasonForTradeSchema = z.object({
+  confidenceInterval: z.tuple([z.number().min(0), z.number().max(1)]).optional(),
+  reason: z.string().min(1),
+  theoreticalPriceMethod: z.string().min(1),
+});
+
 const placeOrderSchema = z.object({
   marketId: z.string(),
   accountId: z.string().optional(), // Optional when using X-Agent-Key
@@ -52,6 +58,7 @@ const placeOrderSchema = z.object({
   type: z.enum(['LIMIT', 'MARKET']),
   price: z.number().positive().nullable().optional(),
   quantity: z.number().positive(),
+  reasonForTrade: reasonForTradeSchema.optional(),
 });
 
 const cancelOrderSchema = z.object({
@@ -270,6 +277,13 @@ router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddlewa
     if (req.agent && data.accountId && data.accountId !== req.accountId) {
       return res.status(403).json({ error: 'Agent can only trade on own account' });
     }
+    if (req.agent && !data.reasonForTrade) {
+      return res.status(400).json({
+        error: 'reasonForTrade required for agent orders',
+        code: 'REASON_FOR_TRADE_REQUIRED',
+        hint: 'Include reasonForTrade: { reason, theoreticalPriceMethod, confidenceInterval?: [low, high] } to document your reasoning',
+      });
+    }
     const result = await exchangeService.placeOrder({
       marketId: data.marketId,
       accountId: effectiveAccountId,
@@ -277,6 +291,7 @@ router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddlewa
       type: data.type as OrderType,
       price: data.price !== null && data.price !== undefined ? new Decimal(data.price) : null,
       quantity: new Decimal(data.quantity),
+      reasonForTrade: data.reasonForTrade ?? undefined,
     });
     if (req.agent) {
       agentOrdersTotal.inc({ agent_id: req.agent.id });

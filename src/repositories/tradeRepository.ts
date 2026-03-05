@@ -66,6 +66,7 @@ export class TradeRepository {
     price: any;
     quantity: any;
     buyerSide: string;
+    takerReasonForTrade?: unknown;
     createdAt: Date;
   }): Trade {
     return {
@@ -78,6 +79,7 @@ export class TradeRepository {
       price: new Decimal(dbTrade.price.toString()),
       quantity: new Decimal(dbTrade.quantity.toString()),
       buyerSide: dbTrade.buyerSide as any,
+      takerReasonForTrade: dbTrade.takerReasonForTrade as Trade['takerReasonForTrade'],
       createdAt: dbTrade.createdAt,
     };
   }

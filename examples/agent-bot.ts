@@ -40,6 +40,7 @@ async function main() {
   console.log(`Order book has ${orders.length} orders`);
 
   // 3. Place a limit order (no accountId - uses agent's account from X-Agent-Key)
+  // reasonForTrade is required for agent orders - appears in recent trades
   const orderRes = await fetch(`${BASE_URL}/api/orders`, {
     method: 'POST',
     headers,
@@ -49,6 +50,11 @@ async function main() {
       type: 'LIMIT',
       price,
       quantity: 5,
+      reasonForTrade: {
+        reason: 'Example agent placing exploratory order',
+        theoreticalPriceMethod: 'Order book mid / heuristic',
+        confidenceInterval: [0.4, 0.6],
+      },
     }),
   });
 

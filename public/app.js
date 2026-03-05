@@ -793,15 +793,25 @@ function renderApp() {
         <div>Quantity</div>
         <div>Side</div>
         <div>Time</div>
+        <div>Reason</div>
       </div>
       ${state.trades.length === 0 ? '<div class="trade-row trade-empty"><span>No trades yet</span></div>' : state.trades.slice(0, 20).map(t => {
         const sideDisplay = (t.buyerSide === 'BUY' || t.buyerSide === 'BUY_YES') ? 'Buy' : 'Sell';
+        const r = t.takerReasonForTrade;
+        const reasonHtml = r
+          ? `<div class="trade-reason" title="${escapeHtml(r.reason)}">
+              <span class="trade-reason-text">${escapeHtml(r.reason.slice(0, 80))}${r.reason.length > 80 ? '…' : ''}</span>
+              ${r.confidenceInterval ? `<span class="trade-reason-meta">CI: [${r.confidenceInterval[0]}, ${r.confidenceInterval[1]}]</span>` : ''}
+              <span class="trade-reason-meta">Method: ${escapeHtml(r.theoreticalPriceMethod)}</span>
+            </div>`
+          : '<span class="trade-reason-none">—</span>';
         return `
         <div class="trade-row">
           <div>${t.price}</div>
           <div>${t.quantity}</div>
           <div>${sideDisplay}</div>
           <div>${new Date(t.createdAt).toLocaleTimeString()}</div>
+          <div>${reasonHtml}</div>
         </div>
       `}).join('')}
     </div>

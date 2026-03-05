@@ -102,7 +102,7 @@ Order rejections return a structured payload for clients:
 }
 ```
 
-Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BELOW_MIN`, `PRICE_ABOVE_MAX`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_BALANCE`, `ORDER_SIZE_EXCEEDS_LIMIT`, `EXPOSURE_LIMIT_EXCEEDED`, `POSITION_LIMIT_EXCEEDED`, `DEPLOYMENT_CAP_EXCEEDED`, `ERR_RATE_LIMIT_PER_MARKET` (per-agent per-market limit: 1 order/sec; see [docs/agent/RULES.md](docs/agent/RULES.md)). Rate-limit errors include `retry_after_ms`:
+Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BELOW_MIN`, `PRICE_ABOVE_MAX`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_BALANCE`, `ORDER_SIZE_EXCEEDS_LIMIT`, `EXPOSURE_LIMIT_EXCEEDED`, `POSITION_LIMIT_EXCEEDED`, `DEPLOYMENT_CAP_EXCEEDED`, `REASON_FOR_TRADE_REQUIRED` (agent orders must include `reasonForTrade`), `ERR_RATE_LIMIT_PER_MARKET` (per-agent per-market limit: 1 order/sec; see [docs/agent/RULES.md](docs/agent/RULES.md)). Rate-limit errors include `retry_after_ms`:
 
 ```json
 {
@@ -152,7 +152,7 @@ curl -X POST http://localhost:3000/api/agents \
   -d '{"name": "my-agent"}'
 ```
 
-Use `X-Agent-Key: agent_xxx` for orders (omit `accountId` in body). Per-market rate limit: 1 order/sec. Respect `retry_after_ms` in 429 responses.
+Use `X-Agent-Key: agent_xxx` for orders (omit `accountId` in body). Agent orders require `reasonForTrade` (reason, theoreticalPriceMethod, optional confidenceInterval). Per-market rate limit: 1 order/sec. Respect `retry_after_ms` in 429 responses.
 
 ---
 

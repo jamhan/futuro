@@ -1,6 +1,7 @@
 /**
  * Paper top-up service integration tests. Requires DATABASE_URL.
  */
+import { createHash } from 'crypto';
 import bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../../src/db/client';
@@ -16,10 +17,12 @@ describe('paperTopup', () => {
       data: { balance: 10000, isPaper: true },
     });
     agentAccountId = account.id;
+    const testKey = 'agent_test_key';
     await prisma.agentProfile.create({
       data: {
         name: 'paper-topup-test-agent',
-        apiKeyHash: await bcrypt.hash('agent_test_key', 10),
+        apiKeyHash: await bcrypt.hash(testKey, 10),
+        apiKeyLookup: createHash('sha256').update(testKey).digest('hex'),
         startingBalance: new Prisma.Decimal(10000),
         accountId: account.id,
       },
@@ -101,10 +104,12 @@ describe('paperTopup', () => {
       const account = await prisma.account.create({
         data: { balance: 500, isPaper: true },
       });
+      const suspendedKey = 'agent_suspended_key';
       await prisma.agentProfile.create({
         data: {
           name: 'suspended-agent',
-          apiKeyHash: await bcrypt.hash('agent_suspended_key', 10),
+          apiKeyHash: await bcrypt.hash(suspendedKey, 10),
+          apiKeyLookup: createHash('sha256').update(suspendedKey).digest('hex'),
           startingBalance: new Prisma.Decimal(10000),
           accountId: account.id,
           status: 'SUSPENDED',
