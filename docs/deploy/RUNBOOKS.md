@@ -78,7 +78,7 @@ fly deploy -a oraclebook --no-cache
    - Re-run oracle ingestion after data is available
 
 5. **Settle affected markets**
-   - After resolution: `POST /api/markets/:id/settle` for each resolved market
+   - After resolution: `POST /api/admin/settlements/:marketId/run` (Bearer FUTURO_ADMIN_KEY) for each resolved market, or let the worker cron settle automatically when REDIS_URL is set
 
 ---
 

@@ -66,6 +66,7 @@ model AgentProfile {
   id              String          @id @default(cuid())
   name            String
   apiKeyHash      String
+  apiKeyLookup    String?         @unique // SHA-256 of raw key for O(1) lookup; null for legacy agents
   startingBalance Decimal        @default(10000) @db.Decimal(20, 8)
   status          AgentStatus    @default(ACTIVE)
   trustTier       AgentTrustTier @default(UNVERIFIED)

@@ -20,8 +20,8 @@ app = "oraclebook"
   min_machines_running = 1
 
   [[http_service.checks]]
-    grace_period = "30s"
+    grace_period = "45s"
     interval = "15s"
     method = "GET"
     path = "/healthz"
-    timeout = "2s"
+    timeout = "5s"

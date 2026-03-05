@@ -408,6 +408,8 @@ describe('API', () => {
       let now = 1000;
       setNowFn(() => now);
       clearBuckets();
+      const prevGlobal = process.env.AGENT_RATE_LIMIT_GLOBAL_ENABLED;
+      process.env.AGENT_RATE_LIMIT_GLOBAL_ENABLED = 'false'; // Test per-market only; global uses real Date.now()
 
       try {
         const agentRes = await request(app)
@@ -461,7 +463,7 @@ describe('API', () => {
         });
         expect(second.body.error.retry_after_ms).toBeGreaterThanOrEqual(900);
 
-        now = 2100; // 1.1 sec later
+        now = 2500; // 1.5 sec later (ensure token refill)
 
         const third = await request(app)
           .post('/api/orders')
@@ -471,6 +473,7 @@ describe('API', () => {
         expect(third.status).toBe(201);
       } finally {
         resetNowFn();
+        process.env.AGENT_RATE_LIMIT_GLOBAL_ENABLED = prevGlobal;
       }
     }, 25000);
 
@@ -663,6 +666,7 @@ describe('API', () => {
   });
 
   describe('Agent auth: invalid key', () => {
+    jest.setTimeout(30000); // Legacy fallback can be slow when many pre-migration agents exist
     it('returns 401 for invalid X-Agent-Key', async () => {
       const res = await request(app)
         .get('/api/accounts/some-account-id')

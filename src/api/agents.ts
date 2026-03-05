@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -60,6 +60,7 @@ router.post('/', requireAdminKey, async (req: Request, res: Response) => {
     const startingBalance = new Prisma.Decimal(STARTING_BALANCE);
     const apiKey = `agent_${randomUUID()}`;
     const apiKeyHash = await bcrypt.hash(apiKey, 10);
+    const apiKeyLookup = createHash('sha256').update(apiKey).digest('hex');
 
     const result = await prisma.$transaction(async (tx) => {
       const account = await tx.account.create({
@@ -73,6 +74,7 @@ router.post('/', requireAdminKey, async (req: Request, res: Response) => {
         data: {
           name: data.name,
           apiKeyHash,
+          apiKeyLookup,
           startingBalance,
           accountId: account.id,
         },

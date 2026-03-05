@@ -78,8 +78,15 @@ echo "=== 7. Resolve (index value within bounds) ==="
 curl -s -X POST "$BASE/markets/$WEATHER_ID/resolve" -H "Content-Type: application/json" -d "{\"indexValue\":$PRICE}" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); if(d.error){console.error(d.error);process.exit(1)}; console.log('Resolved:', d.market?.state)"
 
 echo ""
-echo "=== 8. Settle ==="
-curl -s -X POST "$BASE/markets/$WEATHER_ID/settle" -H "Content-Type: application/json" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Settled:', d.market?.state, 'payouts:', JSON.stringify(d.settlements))"
+echo "=== 8. Settle (admin) ==="
+ADMIN_KEY="${FUTURO_ADMIN_KEY:-}"
+if [ -z "$ADMIN_KEY" ]; then
+  echo "Skipping settle: FUTURO_ADMIN_KEY not set. To test: FUTURO_ADMIN_KEY=xxx ./run-quick-test-futures.sh"
+else
+  curl -s -X POST "$BASE/admin/settlements/$WEATHER_ID/run" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $ADMIN_KEY" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Settled:', d.status?.state, 'jobId:', d.jobId)"
+fi
 
 echo ""
 echo "=== 9. Account balances ==="
@@ -87,4 +94,4 @@ curl -s "$BASE/accounts/$A1" | node -e "const d=JSON.parse(require('fs').readFil
 curl -s "$BASE/accounts/$A2" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log('Account 2 balance:', d.balance)"
 
 echo ""
-echo "Done. Futures flow: match -> lock -> resolve -> settle."
+echo "Done. Futures flow: match -> lock -> resolve -> settle (via admin or worker)."

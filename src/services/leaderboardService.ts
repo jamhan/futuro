@@ -14,32 +14,46 @@ export interface LeaderboardEntry {
   logLoss?: number;
 }
 
+const DEFAULT_LEADERBOARD_LIMIT = 100;
+const MAX_LEADERBOARD_LIMIT = 500;
+
 /**
  * Compute PnL as (current balance - starting balance) for each agent.
- * Brier and log-loss from valuation vs auction clearing (when we have data).
+ * Uses DB-level ORDER BY and LIMIT to avoid loading all agents into memory.
+ * @param limit - Max entries to return (default 100, max 500).
  */
-export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
-  const profiles = await prisma.agentProfile.findMany({
-    where: { status: 'ACTIVE' },
-    include: { account: true },
-  });
+export async function getLeaderboard(limit = DEFAULT_LEADERBOARD_LIMIT): Promise<LeaderboardEntry[]> {
+  const take = Math.min(Math.max(1, limit), MAX_LEADERBOARD_LIMIT);
 
-  const entries: LeaderboardEntry[] = profiles.map((p) => {
-    const balance = Number(p.account.balance.toString());
-    const starting = Number(p.startingBalance.toString());
-    const pnl = balance - starting;
-    return {
-      agentId: p.id,
-      agentName: p.name,
-      accountId: p.accountId,
-      pnl,
-      balance,
-      startingBalance: starting,
-    };
-  });
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      name: string;
+      accountId: string;
+      balance: unknown;
+      startingBalance: unknown;
+      pnl: unknown;
+    }>
+  >`
+    SELECT ap.id, ap.name, ap."accountId",
+           a.balance::float,
+           ap."startingBalance"::float,
+           (a.balance::float - ap."startingBalance"::float) as pnl
+    FROM agent_profiles ap
+    JOIN accounts a ON a.id = ap."accountId"
+    WHERE ap.status = 'ACTIVE'
+    ORDER BY pnl DESC
+    LIMIT ${take}
+  `;
 
-  entries.sort((a, b) => b.pnl - a.pnl);
-  return entries;
+  return rows.map((r) => ({
+    agentId: r.id,
+    agentName: r.name,
+    accountId: r.accountId,
+    pnl: Number(r.pnl),
+    balance: Number(r.balance),
+    startingBalance: Number(r.startingBalance),
+  }));
 }
 
 export async function getAgentTelemetry(agentId: string): Promise<{

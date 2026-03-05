@@ -10,8 +10,6 @@ import { TradeRepository } from '../repositories/tradeRepository';
 import { AccountRepository } from '../repositories/accountRepository';
 import { OracleService } from '../services/oracle';
 import { MockWeatherOracle } from '../services/oracle';
-import { SettlementService } from '../services/settlement';
-import { LedgerService } from '../services/ledgerService';
 import { getLeaderboard } from '../services/leaderboardService';
 import { agentOrdersTotal, agentOrderRejectionsTotal } from '../services/metrics';
 import { getIndexValueForMarket } from '../services/indexProviders';
@@ -35,8 +33,6 @@ const orderRepo = new OrderRepository();
 const tradeRepo = new TradeRepository();
 const accountRepo = new AccountRepository();
 const oracleService = new OracleService(new MockWeatherOracle());
-const settlementService = new SettlementService();
-const ledgerService = new LedgerService();
 
 // Validation schemas
 const createMarketSchema = z.object({
@@ -74,7 +70,8 @@ router.use('/auction', auctionRouter);
 // Leaderboard
 router.get('/leaderboard', async (req, res) => {
   try {
-    const entries = await getLeaderboard();
+    const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;
+    const entries = await getLeaderboard(limit);
     res.json(entries);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -228,72 +225,6 @@ router.post('/markets/:id/resolve', async (req, res) => {
     });
 
     res.json({ market: updated, oracleResult: { outcome, value, source } });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.post('/markets/:id/settle', async (req, res) => {
-  try {
-    const market = await marketRepo.findById(req.params.id);
-    if (!market) {
-      return res.status(404).json({ error: 'Market not found' });
-    }
-    if (!MarketLifecycle.canTransition(market.state, MarketState.SETTLED)) {
-      return res.status(400).json({ error: 'Market must be RESOLVED to settle' });
-    }
-
-    const oracle = await prisma.oracleResult.findUnique({
-      where: { marketId: req.params.id },
-    });
-    if (!oracle) {
-      return res.status(400).json({ error: 'Market has no oracle result; resolve first' });
-    }
-
-    const positions = await accountRepo.findPositionsByMarket(req.params.id);
-    const winningOutcome = (oracle.outcome as Outcome) || Outcome.YES;
-    const indexValue = new Decimal(oracle.value.toString());
-    const contractMultiplier =
-      market.contractMultiplier != null ? market.contractMultiplier : new Decimal(1);
-    const options = isFuturesMarket(market)
-      ? { marketType: MarketType.FUTURES, indexValue, contractMultiplier }
-      : undefined;
-
-    const settlements = settlementService.calculateSettlements(
-      positions,
-      winningOutcome,
-      options
-    );
-
-    const journalLines = [];
-    for (const [accountId, payout] of settlements) {
-      const p = new Decimal(payout.toString());
-      if (p.gt(0)) {
-        journalLines.push({
-          accountId,
-          debit: new Decimal(0),
-          credit: p,
-        });
-      } else if (p.lt(0)) {
-        journalLines.push({
-          accountId,
-          debit: p.abs(),
-          credit: new Decimal(0),
-        });
-      }
-    }
-    if (journalLines.length > 0) {
-      await ledgerService.postJournal(
-        journalLines,
-        { description: 'settlement', refId: req.params.id }
-      );
-    }
-
-    const updated = await marketRepo.updateState(req.params.id, MarketState.SETTLED, {
-      settledAt: new Date(),
-    });
-
-    res.json({ market: updated, settlements: Object.fromEntries(settlements) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

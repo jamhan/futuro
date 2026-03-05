@@ -126,7 +126,7 @@ Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BE
 - `POST /api/markets/:id/open` – Open for trading
 - `POST /api/markets/:id/lock` – Lock (stop trading)
 - `POST /api/markets/:id/resolve` – Resolve via oracle
-- `POST /api/markets/:id/settle` – Settle positions
+- `POST /api/admin/settlements/:marketId/run` – Settle positions (admin; requires `FUTURO_ADMIN_KEY`)
 
 ### Orders
 

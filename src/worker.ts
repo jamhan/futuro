@@ -66,7 +66,7 @@ if (process.env.REDIS_URL) {
   console.log('[worker] Settlement disabled: Redis not configured (set REDIS_URL)');
 }
 
-server.listen(WORKER_PORT, () => {
+server.listen(WORKER_PORT, '0.0.0.0', () => {
   console.log(`[worker] OracleBook worker running on port ${WORKER_PORT}`);
   console.log(`[worker] Health: http://localhost:${WORKER_PORT}/health`);
 });
