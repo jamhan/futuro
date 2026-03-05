@@ -2,9 +2,11 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { OracleIngestor } from '../services/oracleIngestor';
 import { getPrismaClient } from '../db/client';
+import { SettlementService } from '../services/settlement';
 
 const router = Router();
 const prisma = getPrismaClient();
+const settlementService = new SettlementService();
 
 const patchTrustSchema = z.object({
   trustTier: z.enum(['UNVERIFIED', 'VERIFIED', 'TRUSTED']),
@@ -47,6 +49,40 @@ router.post('/oracle/import', requireAdminKey, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Ingestion failed',
+    });
+  }
+});
+
+router.post('/settlements/:marketId/run', requireAdminKey, async (req, res) => {
+  try {
+    const { marketId } = req.params;
+    const market = await prisma.market.findUnique({
+      where: { id: marketId },
+      include: { oracleResult: true, settlementStatus: true },
+    });
+    if (!market) {
+      return res.status(404).json({ error: 'Market not found' });
+    }
+    let jobId: string | undefined;
+    try {
+      const { enqueueSettlement } = await import('../queues/settlementQueue');
+      jobId = await enqueueSettlement(marketId);
+    } catch {
+      // Redis down: run settlement synchronously
+      const result = await settlementService.settleMarket(marketId);
+      return res.json({
+        jobId: null,
+        status: result.status,
+      });
+    }
+    const status = await settlementService.getSettlementStatus(marketId);
+    res.json({
+      jobId,
+      status: status ?? { state: 'PENDING' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to enqueue settlement',
     });
   }
 });

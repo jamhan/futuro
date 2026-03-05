@@ -85,6 +85,16 @@ export const ledgerJournalsTotal = new Counter({
   labelNames: ['description'],
 });
 
+export const settlementJobsTotal = new Counter({
+  name: 'settlement_jobs_total',
+  help: 'Total settlement jobs processed',
+});
+
+export const settlementFailuresTotal = new Counter({
+  name: 'settlement_failures_total',
+  help: 'Total settlement job failures',
+});
+
 export async function getMetrics(): Promise<string> {
   const mem = process.memoryUsage();
   nodejsHeapUsedBytes.set(mem.heapUsed);

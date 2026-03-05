@@ -102,6 +102,7 @@ model Market {
   positions     Position[]
   oracleResult     OracleResult?
   oracleObservation OracleObservation?
+  settlementStatus SettlementStatus?
 
   @@map("markets")
 }
@@ -224,5 +225,36 @@ model OracleObservation {
   market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
 
   @@map("oracle_observations")
+}
+
+model SettlementStatus {
+  id        String   @id @default(uuid())
+  marketId  String   @unique
+  state     String   // PENDING | RUNNING | COMPLETE | FAILED
+  lastRunAt DateTime?
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  audits SettlementAudit[]
+
+  @@map("settlement_status")
+}
+
+model SettlementAudit {
+  id        String   @id @default(uuid())
+  marketId  String
+  accountId String
+  delta     Decimal  @db.Decimal(20, 8) // positive = credit, negative = debit
+  journalId String?
+  createdAt DateTime @default(now())
+
+  settlementStatus   SettlementStatus @relation(fields: [settlementStatusId], references: [id], onDelete: Cascade)
+  settlementStatusId String
+
+  @@index([marketId])
+  @@index([accountId])
+  @@map("settlement_audits")
 }
 

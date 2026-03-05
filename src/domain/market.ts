@@ -41,7 +41,7 @@ export class MarketLifecycle {
     const validTransitions: Record<MarketState, MarketState[]> = {
       [MarketState.DRAFT]: [MarketState.OPEN],
       [MarketState.OPEN]: [MarketState.LOCKED],
-      [MarketState.LOCKED]: [MarketState.RESOLVED],
+      [MarketState.LOCKED]: [MarketState.RESOLVED, MarketState.SETTLED], // SETTLED when oracle result exists
       [MarketState.RESOLVED]: [MarketState.SETTLED],
       [MarketState.SETTLED]: [], // Terminal state
     };
@@ -64,10 +64,10 @@ export class MarketLifecycle {
   }
 
   /**
-   * Check if market can be settled
+   * Check if market can be settled (RESOLVED or LOCKED with oracle result)
    */
   static canSettle(state: MarketState): boolean {
-    return state === MarketState.RESOLVED;
+    return state === MarketState.RESOLVED || state === MarketState.LOCKED;
   }
 }
 

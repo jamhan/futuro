@@ -1,5 +1,5 @@
 /**
- * Worker process: runs cron jobs (paper top-up, auction, oracle ingestion).
+ * Worker process: runs cron jobs (paper top-up, auction, oracle ingestion, settlement).
  * Separate from the app server to isolate heavy work and keep the API responsive.
  * Exposes /health, /healthz (liveness) and /readyz (readiness) for probes.
  */
@@ -8,6 +8,8 @@ import http from 'http';
 import { startPaperTopupCron } from './jobs/paperTopupCron';
 import { startAuctionCron } from './jobs/auctionCron';
 import { startOracleIngestionCron } from './jobs/oracleIngestionCron';
+import { startSettlementCron } from './jobs/settlementCron';
+import { createSettlementWorker } from './queues/settlementQueue';
 import { getMetrics, getContentType } from './services/metrics';
 import { getPrismaClient } from './db/client';
 
@@ -50,6 +52,19 @@ const server = http.createServer(async (req, res) => {
 startPaperTopupCron();
 startAuctionCron();
 startOracleIngestionCron();
+
+// Start settlement worker and cron (requires Redis - set REDIS_URL)
+if (process.env.REDIS_URL) {
+  try {
+    createSettlementWorker();
+    startSettlementCron();
+    console.log('[worker] Settlement queue and cron started');
+  } catch (err) {
+    console.error('[worker] Settlement failed to start (Redis unreachable?):', err);
+  }
+} else {
+  console.log('[worker] Settlement disabled: Redis not configured (set REDIS_URL)');
+}
 
 server.listen(WORKER_PORT, () => {
   console.log(`[worker] OracleBook worker running on port ${WORKER_PORT}`);

@@ -21,6 +21,7 @@ Reference for OracleBook server and worker. All config is externalized via envir
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WORKER_PORT` | 3001 | Health/metrics port for probes |
+| `REDIS_URL` | (unset) | Redis URL for settlement queue. If unset, automatic settlement is disabled; admin trigger uses sync fallback. |
 | `PAPER_TOPUP_CRON` | `0 * * * *` | Cron schedule for paper account top-ups |
 | `AUCTION_CRON` | `0 * * * *` | Cron schedule for auction runs |
 | `ORACLE_INGESTION_CRON` | `*/15 * * * *` | Cron schedule for oracle file ingestion |

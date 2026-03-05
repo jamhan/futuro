@@ -7,7 +7,7 @@ describe('SettlementService', () => {
   const service = new SettlementService();
 
   describe('calculateBinaryPayout', () => {
-    it('pays yesShares when outcome is YES', () => {
+    it('pays yesShares minus noShares when outcome is YES', () => {
       const pos: Position = {
         accountId: 'a1',
         marketId: 'm1',
@@ -18,7 +18,18 @@ describe('SettlementService', () => {
       expect(service.calculateBinaryPayout(pos, Outcome.YES).toNumber()).toBe(10);
     });
 
-    it('pays noShares when outcome is NO', () => {
+    it('debits noShares when outcome is YES (loser)', () => {
+      const pos: Position = {
+        accountId: 'a1',
+        marketId: 'm1',
+        yesShares: new Decimal(0),
+        noShares: new Decimal(5),
+        quantity: null,
+      };
+      expect(service.calculateBinaryPayout(pos, Outcome.YES).toNumber()).toBe(-5);
+    });
+
+    it('pays noShares minus yesShares when outcome is NO', () => {
       const pos: Position = {
         accountId: 'a1',
         marketId: 'm1',
