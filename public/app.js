@@ -12,6 +12,10 @@ function checkInviteRequired(res, body) {
     state.inviteRequired = true;
     return true;
   }
+  if (res.status === 401 && body && body.code === 'API_KEY_REQUIRED') {
+    state.apiKeyRequired = true;
+    return true;
+  }
   return false;
 }
 
@@ -25,6 +29,7 @@ let state = {
   account: null,
   error: null,
   inviteRequired: false,
+  apiKeyRequired: false,
 };
 
 // Fetch all markets (for picker when no market in URL)
@@ -340,6 +345,16 @@ function renderApp() {
   const root = document.getElementById('root');
   if (!root) return;
 
+  if (state.apiKeyRequired) {
+    root.innerHTML = `
+      <div class="market-info">
+        <h3>API Access Required</h3>
+        <p style="margin-bottom: 1rem;">This instance requires an API key or invite code. If you have an invite code, the operator should have set up invite-only mode.</p>
+        <p style="color: var(--color-text-muted); font-size: 14px;">Contact the operator or set INVITE_SECRET for invite-only access.</p>
+      </div>
+    `;
+    return;
+  }
   if (state.inviteRequired) {
     root.innerHTML = `
       <div class="market-info" style="max-width: 400px; margin: 2rem auto;">
