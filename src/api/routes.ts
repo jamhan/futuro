@@ -20,8 +20,10 @@ import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 import { MarketState, MarketType, OrderSide, OrderType, Outcome } from '../domain/types';
 import { getPrismaClient } from '../db/client';
 import { agentRateLimitMiddleware } from '../middleware/agentRateLimit';
+import { requireTrustedAgentMiddleware } from '../middleware/requireTrustedAgent';
 import { agentPerMarketRateLimitMiddleware } from '../middleware/agentPerMarketRateLimit';
 import { isOrderRejectionError } from '../errors/orderRejection';
+import { broadcast } from '../services/wsBroadcast';
 import { z } from 'zod';
 
 const router = Router();
@@ -327,7 +329,7 @@ router.get('/markets/:marketId/orders', async (req, res) => {
   }
 });
 
-router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddleware, async (req, res) => {
+router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddleware, requireTrustedAgentMiddleware, async (req, res) => {
   try {
     const data = placeOrderSchema.parse(req.body);
     const effectiveAccountId = req.accountId ?? data.accountId;
@@ -348,6 +350,14 @@ router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddlewa
     if (req.agent) {
       agentOrdersTotal.inc({ agent_id: req.agent.id });
     }
+    const { order } = result;
+    const resting = order.status === 'PENDING' || order.status === 'PARTIALLY_FILLED';
+    if (resting) {
+      broadcast({
+        type: 'order_book_delta',
+        payload: { marketId: order.marketId, orderId: order.id, action: 'create' },
+      });
+    }
     res.status(201).json(result);
   } catch (error: any) {
     if (req.agent) {
@@ -364,7 +374,7 @@ router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddlewa
   }
 });
 
-router.delete('/orders/:id', async (req, res) => {
+router.delete('/orders/:id', requireTrustedAgentMiddleware, async (req, res) => {
   try {
     const data = cancelOrderSchema.parse(req.query);
     const effectiveAccountId = req.accountId ?? data.accountId;
@@ -377,6 +387,10 @@ router.delete('/orders/:id', async (req, res) => {
       return res.status(403).json({ error: 'Agent can only cancel orders for own account' });
     }
     const order = await exchangeService.cancelOrder(req.params.id, effectiveAccountId);
+    broadcast({
+      type: 'order_book_delta',
+      payload: { marketId: order.marketId, orderId: order.id, action: 'cancel' },
+    });
     res.json(order);
   } catch (error: any) {
     if (error instanceof z.ZodError) {

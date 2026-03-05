@@ -1,7 +1,14 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { OracleIngestor } from '../services/oracleIngestor';
+import { getPrismaClient } from '../db/client';
 
 const router = Router();
+const prisma = getPrismaClient();
+
+const patchTrustSchema = z.object({
+  trustTier: z.enum(['UNVERIFIED', 'VERIFIED', 'TRUSTED']),
+});
 const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY;
 
 function requireAdminKey(req: Request, res: Response, next: () => void): void {
@@ -40,6 +47,35 @@ router.post('/oracle/import', requireAdminKey, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Ingestion failed',
+    });
+  }
+});
+
+router.patch('/agents/:id/trust', requireAdminKey, async (req, res) => {
+  try {
+    const body = patchTrustSchema.safeParse(req.body);
+    if (!body.success) {
+      return res.status(400).json({ error: body.error.errors });
+    }
+    const profile = await prisma.agentProfile.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!profile) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const updated = await prisma.agentProfile.update({
+      where: { id: req.params.id },
+      data: { trustTier: body.data.trustTier },
+    });
+    res.json({
+      id: updated.id,
+      name: updated.name,
+      trustTier: updated.trustTier,
+      accountId: updated.accountId,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to update trust tier',
     });
   }
 });

@@ -9,6 +9,19 @@ import { setNowFn, resetNowFn, clearBuckets } from '../../src/lib/rateLimit/toke
 const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY || 'test-admin-key';
 const prisma = getPrismaClient();
 
+async function promoteAgentToTrusted(accountId: string): Promise<void> {
+  const profile = await prisma.agentProfile.findFirst({
+    where: { accountId },
+  });
+  if (!profile) throw new Error(`No profile for account ${accountId}`);
+  const res = await request(app)
+    .patch(`/api/admin/agents/${profile.id}/trust`)
+    .set('Content-Type', 'application/json')
+    .set('Authorization', `Bearer ${ADMIN_KEY}`)
+    .send({ trustTier: 'TRUSTED' });
+  if (res.status !== 200) throw new Error(`Promote failed: ${res.status} ${JSON.stringify(res.body)}`);
+}
+
 describe('API', () => {
   jest.setTimeout(15000);
   describe('GET /health', () => {
@@ -102,6 +115,76 @@ describe('API', () => {
     });
   });
 
+  describe('PATCH /api/admin/agents/:id/trust', () => {
+    it('returns 401 without admin key', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'trust-test-agent' });
+      const profile = await prisma.agentProfile.findFirst({
+        where: { accountId: agentRes.body.accountId },
+      });
+
+      const res = await request(app)
+        .patch(`/api/admin/agents/${profile!.id}/trust`)
+        .set('Content-Type', 'application/json')
+        .send({ trustTier: 'TRUSTED' });
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 404 for non-existent agent', async () => {
+      const res = await request(app)
+        .patch('/api/admin/agents/non-existent-cuid/trust')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ trustTier: 'TRUSTED' });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for invalid trustTier', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'trust-validation-agent' });
+      const profile = await prisma.agentProfile.findFirst({
+        where: { accountId: agentRes.body.accountId },
+      });
+
+      const res = await request(app)
+        .patch(`/api/admin/agents/${profile!.id}/trust`)
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ trustTier: 'INVALID' });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 200 and updated profile with valid trustTier', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'trust-update-agent' });
+      const profile = await prisma.agentProfile.findFirst({
+        where: { accountId: agentRes.body.accountId },
+      });
+
+      const res = await request(app)
+        .patch(`/api/admin/agents/${profile!.id}/trust`)
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ trustTier: 'VERIFIED' });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        id: profile!.id,
+        name: 'trust-update-agent',
+        trustTier: 'VERIFIED',
+        accountId: agentRes.body.accountId,
+      });
+    });
+  });
+
   describe('POST /api/admin/oracle/import', () => {
     it('returns 401 without admin key', async () => {
       const res = await request(app)
@@ -185,6 +268,86 @@ describe('API', () => {
   });
 
   describe('Agent auth: POST /api/orders', () => {
+    it('returns 403 when non-trusted agent attempts to place order', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'untrusted-order-agent' });
+      const agentKey = agentRes.body.apiKey;
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Test untrusted',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      const orderRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({
+          marketId,
+          side: 'BUY_YES',
+          type: 'LIMIT',
+          price: 0.5,
+          quantity: 5,
+        });
+
+      expect(orderRes.status).toBe(403);
+      expect(orderRes.body.code).toBe('AGENT_NOT_TRUSTED');
+    });
+
+    it('places order after admin promotes agent to TRUSTED', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'promote-then-order-agent' });
+      const agentKey = agentRes.body.apiKey;
+      const accountId = agentRes.body.accountId;
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Test promote flow',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      const orderBeforePromote = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({ marketId, side: 'BUY_YES', type: 'LIMIT', price: 0.5, quantity: 5 });
+      expect(orderBeforePromote.status).toBe(403);
+
+      await promoteAgentToTrusted(accountId);
+
+      // Wait for rate limit buckets to refill (per-market 1/sec, global 60/min)
+      await new Promise((r) => setTimeout(r, 1100));
+
+      const orderAfterPromote = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({ marketId, side: 'BUY_YES', type: 'LIMIT', price: 0.5, quantity: 5 });
+      expect(orderAfterPromote.status).toBe(201);
+      expect(orderAfterPromote.body.order.accountId).toBe(accountId);
+    });
+
     it('returns 400 when accountId missing and no X-Agent-Key', async () => {
       const res = await request(app)
         .post('/api/orders')
@@ -207,6 +370,7 @@ describe('API', () => {
         .send({ name: 'order-agent' });
       const agentKey = agentRes.body.apiKey;
       const accountId = agentRes.body.accountId;
+      await promoteAgentToTrusted(accountId);
 
       const marketRes = await request(app)
         .post('/api/markets')
@@ -253,6 +417,7 @@ describe('API', () => {
           .send({ name: 'rate-limit-agent' });
         const agentKey = agentRes.body.apiKey;
         const accountId = agentRes.body.accountId;
+        await promoteAgentToTrusted(accountId);
 
         const marketRes = await request(app)
           .post('/api/markets')
@@ -316,6 +481,7 @@ describe('API', () => {
         .set('Authorization', `Bearer ${ADMIN_KEY}`)
         .send({ name: 'conflict-agent' });
       const agentKey = agentRes.body.apiKey;
+      await promoteAgentToTrusted(agentRes.body.accountId);
 
       const otherRes = await request(app)
         .post('/api/accounts')
@@ -354,6 +520,51 @@ describe('API', () => {
   });
 
   describe('Agent auth: DELETE /api/orders/:id', () => {
+    it('returns 403 when non-trusted agent attempts to cancel order', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'untrusted-cancel-agent' });
+      const agentKey = agentRes.body.apiKey;
+      const accountId = agentRes.body.accountId;
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Test untrusted cancel',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      // Place order as human (accountId in body, no agent key) to create order for this account
+      const placeRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .send({
+          marketId,
+          accountId,
+          side: 'BUY_YES',
+          type: 'LIMIT',
+          price: 0.5,
+          quantity: 10,
+        });
+      const orderId = placeRes.body.order?.id ?? placeRes.body.id;
+      expect(placeRes.status).toBe(201);
+
+      const cancelRes = await request(app)
+        .delete(`/api/orders/${orderId}`)
+        .set('X-Agent-Key', agentKey);
+
+      expect(cancelRes.status).toBe(403);
+      expect(cancelRes.body.code).toBe('AGENT_NOT_TRUSTED');
+    });
+
     it('cancels order using X-Agent-Key (no accountId in query)', async () => {
       const agentRes = await request(app)
         .post('/api/agents')
@@ -362,6 +573,7 @@ describe('API', () => {
         .send({ name: 'cancel-agent' });
       const agentKey = agentRes.body.apiKey;
       const accountId = agentRes.body.accountId;
+      await promoteAgentToTrusted(accountId);
 
       const marketRes = await request(app)
         .post('/api/markets')
@@ -412,6 +624,8 @@ describe('API', () => {
         .set('Content-Type', 'application/json')
         .set('Authorization', `Bearer ${ADMIN_KEY}`)
         .send({ name: 'agent-b-cancel' });
+      await promoteAgentToTrusted(agentARes.body.accountId);
+      await promoteAgentToTrusted(agentBRes.body.accountId);
 
       const marketRes = await request(app)
         .post('/api/markets')
