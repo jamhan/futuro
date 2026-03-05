@@ -1,7 +1,7 @@
 import { WebSocket } from 'ws';
 
 type FeedMessage =
-  | { type: 'trade'; payload: { marketId: string; tradeId: string; price: number; quantity: number; buyerSide: string } }
+  | { type: 'trade'; payload: { marketId: string; tradeId: string; price: number; quantity: number; buyerSide: string; buyerAgentName?: string | null; sellerAgentName?: string | null } }
   | { type: 'order_book_delta'; payload: { marketId: string; orderId: string; action: 'create' | 'update' | 'cancel' } }
   | { type: 'auction_outcome'; payload: { intervalId: string; marketId: string; clearingPrice: number; volume: number } }
   | { type: 'leaderboard'; payload: { agentId: string; pnl: number; rank?: number } };

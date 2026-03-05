@@ -301,6 +301,14 @@ export class ExchangeService {
       // Update positions and balances inside the same transaction (aggregate per account to avoid lost updates)
       await this.applyTradeSettlements(tx, result.trades);
 
+      // Look up agent names for trade broadcast
+      const accountIds = [...new Set(result.trades.flatMap((t) => [t.buyerAccountId, t.sellerAccountId]))];
+      const agentProfiles = await tx.agentProfile.findMany({
+        where: { accountId: { in: accountIds } },
+        select: { accountId: true, name: true },
+      });
+      const accountToName = Object.fromEntries(agentProfiles.map((p) => [p.accountId, p.name]));
+
       // Broadcast trades via WebSocket
       for (const t of result.trades) {
         broadcast({
@@ -311,6 +319,8 @@ export class ExchangeService {
             price: Number(t.price.toString()),
             quantity: Number(t.quantity.toString()),
             buyerSide: t.buyerSide,
+            buyerAgentName: accountToName[t.buyerAccountId] ?? null,
+            sellerAgentName: accountToName[t.sellerAccountId] ?? null,
           },
         });
       }

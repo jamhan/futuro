@@ -2,6 +2,13 @@ const API_BASE = typeof window !== 'undefined' && window.location.origin
   ? window.location.origin + '/api'
   : '/api';
 
+function escapeHtml(s) {
+  if (s == null || typeof s !== 'string') return '';
+  const div = typeof document !== 'undefined' && document.createElement ? document.createElement('div') : null;
+  if (div) { div.textContent = s; return div.innerHTML; }
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function apiHeaders() {
   const code = typeof localStorage !== 'undefined' && localStorage.getItem('inviteCode');
   return code ? { 'X-Invite-Code': code } : {};
@@ -32,7 +39,57 @@ let state = {
   apiKeyRequired: false,
   userMode: localStorage.getItem('userMode') || null, // 'observer' | 'agent' | null
   previewMarkets: [], // { market, price } for landing
+  leaderboard: [], // { agentName, pnl, ... } from GET /api/leaderboard
+  liveActivity: [], // Recent trade events for ticker: { agentName, side, price, quantity, time }
 };
+
+let marketWs = null;
+
+function connectMarketWs() {
+  if (!state.market) return;
+  disconnectMarketWs();
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = typeof window !== 'undefined' && window.location.host ? window.location.host : 'localhost:3000';
+  const wsUrl = `${protocol}//${host}/ws`;
+  try {
+    marketWs = new WebSocket(wsUrl);
+    marketWs.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'trade' && msg.payload && state.market && msg.payload.marketId === state.market.id) {
+          loadOrders(state.market.id);
+          loadTrades(state.market.id);
+          pushLiveActivity(msg.payload);
+        }
+        if (msg.type === 'order_book_delta' && msg.payload && state.market && msg.payload.marketId === state.market.id) {
+          loadOrders(state.market.id);
+        }
+      } catch (_) {}
+    };
+    marketWs.onerror = () => {};
+    marketWs.onclose = () => { marketWs = null; };
+  } catch (_) {
+    marketWs = null;
+  }
+}
+
+function disconnectMarketWs() {
+  if (marketWs) {
+    marketWs.close();
+    marketWs = null;
+  }
+}
+
+function pushLiveActivity(payload) {
+  const agentName = payload.buyerSide === 'BUY_YES' || payload.buyerSide === 'BUY'
+    ? (payload.buyerAgentName || 'Trader')
+    : (payload.sellerAgentName || 'Trader');
+  const side = payload.buyerSide === 'BUY_YES' || payload.buyerSide === 'BUY' ? 'buy' : 'sell';
+  state.liveActivity = [
+    { agentName, side, price: payload.price, quantity: payload.quantity, time: Date.now() },
+    ...(state.liveActivity || []),
+  ].slice(0, 10);
+}
 
 // Fetch all markets (for picker when no market in URL)
 async function loadMarkets() {
@@ -55,11 +112,13 @@ async function loadMarket(marketId) {
     const market = await res.json().catch(() => null);
     if (checkInviteRequired(res, market)) { renderApp(); return; }
     state.market = market;
+    state.liveActivity = [];
     await loadOrders(marketId);
     await loadTrades(marketId);
     if (state.accountId) {
       await loadAccount(state.accountId);
     }
+    connectMarketWs();
     renderApp();
   } catch (err) {
     state.error = err.message;
@@ -238,11 +297,25 @@ function clearUserMode() {
   loadMarketsForLanding();
 }
 
+async function loadLeaderboard() {
+  try {
+    const res = await fetch(`${API_BASE}/leaderboard`, { headers: apiHeaders() });
+    const body = await res.json().catch(() => ({}));
+    if (checkInviteRequired(res, body)) return;
+    state.leaderboard = Array.isArray(body) ? body : [];
+  } catch (err) {
+    state.leaderboard = [];
+  }
+}
+
 async function loadMarketsForLanding() {
   try {
-    const res = await fetch(`${API_BASE}/markets`, { headers: apiHeaders() });
-    const body = await res.json().catch(() => ({}));
-    if (checkInviteRequired(res, body)) {
+    const [marketsRes] = await Promise.all([
+      fetch(`${API_BASE}/markets`, { headers: apiHeaders() }),
+      loadLeaderboard(),
+    ]);
+    const body = await marketsRes.json().catch(() => ({}));
+    if (checkInviteRequired(marketsRes, body)) {
       renderApp();
       return;
     }
@@ -284,6 +357,12 @@ function renderLanding() {
       </a>
     `;
   });
+  const leaderboardRows = (state.leaderboard || []).map((a, i) => {
+    const pnl = a.pnl != null ? Number(a.pnl) : 0;
+    const pnlStr = pnl >= 0 ? `+$${Math.abs(pnl).toLocaleString()}` : `-$${Math.abs(pnl).toLocaleString()}`;
+    const pnlClass = pnl >= 0 ? 'leaderboard-pnl-up' : 'leaderboard-pnl-down';
+    return `<div class="leaderboard-row"><span class="leaderboard-rank">#${i + 1}</span><span class="leaderboard-name">${escapeHtml(a.agentName || 'Agent')}</span><span class="leaderboard-pnl ${pnlClass}">${pnlStr}</span></div>`;
+  });
   root.innerHTML = `
     <div class="landing">
       <div class="landing-hero">
@@ -304,6 +383,12 @@ function renderLanding() {
         <h3 class="landing-markets-title">Live markets (sample)</h3>
         <div class="market-preview-grid">
           ${cards.length > 0 ? cards.join('') : '<p class="market-preview-empty">No open markets</p>'}
+        </div>
+      </div>
+      <div class="landing-leaderboard">
+        <h3 class="landing-leaderboard-title">Top agents</h3>
+        <div class="leaderboard-list">
+          ${leaderboardRows.length > 0 ? leaderboardRows.join('') : '<p class="leaderboard-empty">No agents yet</p>'}
         </div>
       </div>
     </div>
@@ -689,6 +774,18 @@ function renderApp() {
       ${state.error ? `<div class="error">${state.error}</div>` : ''}
     </div>
     `}
+    ${(state.liveActivity || []).length > 0 ? `
+    <div class="live-activity-ticker">
+      <span class="live-ticker-label">Live</span>
+      <div class="live-ticker-items">
+        ${state.liveActivity.map(a => {
+          const side = a.side === 'buy' ? 'bought' : 'sold';
+          const priceStr = unit ? `${a.price} ${unit}`.trim() : a.price;
+          return '<span class="live-ticker-item">' + escapeHtml(a.agentName) + ' ' + side + ' ' + a.quantity + ' @ ' + priceStr + '</span>';
+        }).join(' · ')}
+      </div>
+    </div>
+    ` : ''}
     <div class="trades">
       <h3>Recent Trades</h3>
       <div class="trade-row trade-row-header">
@@ -741,6 +838,15 @@ window.togglePriceField = togglePriceField;
 window.submitInviteCode = submitInviteCode;
 window.setUserMode = setUserMode;
 window.clearUserMode = clearUserMode;
+
+window.addEventListener('popstate', () => {
+  const marketId = new URLSearchParams(window.location.search).get('market');
+  if (!marketId && state.market) {
+    state.market = null;
+    disconnectMarketWs();
+    renderApp();
+  }
+});
 
 // Initialize
 const marketId = new URLSearchParams(window.location.search).get('market');
