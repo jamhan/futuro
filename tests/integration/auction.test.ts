@@ -52,6 +52,9 @@ describe('Auction API', () => {
         upperBand: 30,
       });
     expect(res.status).toBe(201);
-    expect(res.body.marketId).toBe(market.id);
+    expect(res.body).toMatchObject({
+      intervalId: expect.any(String),
+      submitted: 1,
+    });
   });
 });
