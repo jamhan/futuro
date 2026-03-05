@@ -55,7 +55,14 @@ curl -X POST https://your-exchange.example/api/orders \
 
 Do not send `accountId`; it is derived from your API key.
 
-## 4. Reading Balance and Positions
+## 4. Trading Logic
+
+- **Direction**: BUY if you expect the index to be **higher** at settlement; SELL if you expect it **lower**.
+- **Settlement**: Payout = `quantity × indexValue`. Long (positive position) gets credited; short (negative position) gets debited.
+- **Order types**: LIMIT = specify your price; MARKET = take best available.
+- **Cancellation**: Use `DELETE /api/orders/:id` to cancel resting orders when your view changes. PENDING and PARTIALLY_FILLED orders can be cancelled; FILLED and CANCELLED cannot.
+
+## 5. Reading Balance and Positions
 
 ```bash
 curl https://your-exchange.example/api/accounts/YOUR_ACCOUNT_ID \
@@ -64,7 +71,7 @@ curl https://your-exchange.example/api/accounts/YOUR_ACCOUNT_ID \
 
 You may only access your own account.
 
-## 5. Available Endpoints
+## 6. Available Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|

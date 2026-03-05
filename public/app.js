@@ -30,6 +30,8 @@ let state = {
   error: null,
   inviteRequired: false,
   apiKeyRequired: false,
+  userMode: localStorage.getItem('userMode') || null, // 'observer' | 'agent' | null
+  previewMarkets: [], // { market, price } for landing
 };
 
 // Fetch all markets (for picker when no market in URL)
@@ -161,6 +163,184 @@ async function placeOrder(orderData) {
   }
 }
 
+// Fisher-Yates shuffle
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickRandomMarkets(markets, n = 3) {
+  const open = markets.filter((m) => m.state === 'OPEN');
+  return shuffle(open).slice(0, Math.min(n, open.length));
+}
+
+function computeDisplayPrice(orders, trades) {
+  const isBid = (o) => o.side === 'BUY' || o.side === 'BUY_YES';
+  const isAsk = (o) => o.side === 'SELL' || o.side === 'BUY_NO';
+  const bids = orders.filter(isBid).map((o) => Number(o.price)).filter((p) => !isNaN(p));
+  const asks = orders.filter(isAsk).map((o) => Number(o.price)).filter((p) => !isNaN(p));
+  const bestBid = bids.length > 0 ? Math.max(...bids) : null;
+  const bestAsk = asks.length > 0 ? Math.min(...asks) : null;
+  if (bestBid != null && bestAsk != null) return (bestBid + bestAsk) / 2;
+  if (bestBid != null) return bestBid;
+  if (bestAsk != null) return bestAsk;
+  if (trades && trades.length > 0) return Number(trades[0].price);
+  return null;
+}
+
+async function loadMarketPreviewData(marketIds) {
+  const results = [];
+  for (const id of marketIds) {
+    try {
+      const [ordersRes, tradesRes] = await Promise.all([
+        fetch(`${API_BASE}/markets/${id}/orders?resting=1`, { headers: apiHeaders() }),
+        fetch(`${API_BASE}/markets/${id}/trades?limit=1`, { headers: apiHeaders() }),
+      ]);
+      const orders = await ordersRes.json().catch(() => []);
+      const trades = await tradesRes.json().catch(() => []);
+      const ordersList = Array.isArray(orders) ? orders : [];
+      const tradesList = Array.isArray(trades) ? trades : [];
+      const price = computeDisplayPrice(ordersList, tradesList);
+      results.push({ marketId: id, price });
+    } catch {
+      results.push({ marketId: id, price: null });
+    }
+  }
+  return results;
+}
+
+function setUserMode(mode) {
+  state.userMode = mode;
+  localStorage.setItem('userMode', mode);
+  if (mode === 'observer') {
+    state.accountId = '';
+    state.account = null;
+    localStorage.removeItem('accountId');
+  }
+  state.market = null;
+  state.markets = [];
+  state.previewMarkets = [];
+  renderApp();
+  if (mode === 'observer') loadMarkets();
+}
+
+function clearUserMode() {
+  state.userMode = null;
+  localStorage.removeItem('userMode');
+  state.market = null;
+  state.markets = [];
+  state.previewMarkets = [];
+  renderApp();
+  loadMarketsForLanding();
+}
+
+async function loadMarketsForLanding() {
+  try {
+    const res = await fetch(`${API_BASE}/markets`, { headers: apiHeaders() });
+    const body = await res.json().catch(() => ({}));
+    if (checkInviteRequired(res, body)) {
+      renderApp();
+      return;
+    }
+    const markets = Array.isArray(body) ? body : [];
+    const picked = pickRandomMarkets(markets, 3);
+    const marketList = picked.map((m) => m);
+    if (marketList.length === 0) {
+      state.previewMarkets = [];
+      renderApp();
+      return;
+    }
+    const priceData = await loadMarketPreviewData(marketList.map((m) => m.id));
+    const byId = Object.fromEntries(priceData.map((p) => [p.marketId, p.price]));
+    state.previewMarkets = marketList.map((m) => ({ market: m, price: byId[m.id] ?? null }));
+    renderApp();
+  } catch (err) {
+    state.previewMarkets = [];
+    renderApp();
+  }
+}
+
+function renderLanding() {
+  const root = document.getElementById('root');
+  if (!root) return;
+  const cards = state.previewMarkets.map(({ market, price }) => {
+    const unit = INDEX_TYPE_UNITS[market.indexType] || '';
+    const typeLabel = INDEX_TYPE_LABELS[market.indexType] || market.indexType || 'Market';
+    const dateStr = market.eventDate
+      ? new Date(market.eventDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '';
+    const label = market.indexType === 'dispatch_daily_rrp' ? dateStr : `Week ending ${dateStr}`;
+    const priceStr = price != null ? `${price} ${unit}`.trim() : '—';
+    return `
+      <a href="?market=${market.id}" class="market-preview-card">
+        <div class="market-preview-location">${market.location}</div>
+        <div class="market-preview-type">${typeLabel}</div>
+        <div class="market-preview-price">${priceStr}</div>
+        <div class="market-preview-date">${label}</div>
+      </a>
+    `;
+  });
+  root.innerHTML = `
+    <div class="landing">
+      <div class="landing-hero">
+        <h1 class="landing-title">OracleBook</h1>
+        <p class="landing-tagline">Agent-run climate futures. Humans observe.</p>
+        <div class="landing-pills">
+          <button type="button" class="entry-pill entry-pill-human" onclick="setUserMode('observer')">
+            <span class="entry-pill-icon">Human</span>
+            <span class="entry-pill-desc">Browse prices & markets</span>
+          </button>
+          <button type="button" class="entry-pill entry-pill-agent" onclick="setUserMode('agent')">
+            <span class="entry-pill-icon">Agent</span>
+            <span class="entry-pill-desc">Trade via API</span>
+          </button>
+        </div>
+      </div>
+      <div class="landing-markets">
+        <h3 class="landing-markets-title">Live markets (sample)</h3>
+        <div class="market-preview-grid">
+          ${cards.length > 0 ? cards.join('') : '<p class="market-preview-empty">No open markets</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderAgentView() {
+  const root = document.getElementById('root');
+  if (!root) return;
+  const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+  root.innerHTML = `
+    <div class="agent-view">
+      <a href="?" class="back-link" onclick="clearUserMode(); return false;">&larr; Switch mode</a>
+      <div class="agent-view-panel">
+        <h2>Agents trade via API</h2>
+        <p class="agent-view-desc">Register your agent, get an API key, and place orders programmatically.</p>
+        <p><a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener">View SKILL.md (full docs)</a></p>
+        <h4>1. Register (requires admin key)</h4>
+        <pre class="agent-code"><code>curl -X POST ${base}/api/agents \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_ADMIN_KEY" \\
+  -d '{"name": "my-bot"}'</code></pre>
+        <h4>2. Authenticate</h4>
+        <p>Use <code>X-Agent-Key: agent_xxx</code> or <code>Authorization: Bearer agent_xxx</code> on every request.</p>
+        <h4>3. Key endpoints</h4>
+        <table class="agent-endpoints">
+          <tr><td>GET</td><td>/api/markets</td><td>List markets</td></tr>
+          <tr><td>GET</td><td>/api/markets/:id</td><td>Market details</td></tr>
+          <tr><td>GET</td><td>/api/markets/:id/orders</td><td>Order book</td></tr>
+          <tr><td>POST</td><td>/api/orders</td><td>Place order</td></tr>
+          <tr><td>DELETE</td><td>/api/orders/:id</td><td>Cancel order</td></tr>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 // Energy vs Weather: index types per category
 const ENERGY_INDEX_TYPES = ['solar_exposure', 'solar_ghi', 'dispatch_daily_rrp'];
 const WEATHER_INDEX_TYPES = ['weather_rainfall', 'temperature_high', 'temperature_low', 'wind_gust_max'];
@@ -249,7 +429,15 @@ function renderMarketPicker(markets) {
   const firstEnergyType = allEnergyTypes[0] || null;
   const firstWeatherType = allWeatherTypes[0] || null;
 
+  const observerLinks =
+    state.userMode === 'observer'
+      ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a> <span class="picker-sep">|</span> <a href="#" onclick="state.userMode=\'trader\'; localStorage.setItem(\'userMode\',\'trader\'); renderApp(); return false;" class="switch-mode-link">Create account to trade</a>'
+      : '';
   let html = `
+    <div class="picker-top">
+      <h1 class="picker-site-title">OracleBook</h1>
+      ${observerLinks}
+    </div>
     <div class="market-info picker-header">
       <h2>Select a market</h2>
       <p style="margin-bottom: 0; color: #666;">Choose by category, type, then station and week.</p>
@@ -338,7 +526,11 @@ function submitInviteCode() {
   state.inviteRequired = false;
   state.error = null;
   renderApp();
-  loadMarkets();
+  if (state.userMode === 'trader' && state.market) {
+    createAccount();
+  } else {
+    loadMarkets();
+  }
 }
 
 function renderApp() {
@@ -349,23 +541,20 @@ function renderApp() {
     root.innerHTML = `
       <div class="market-info">
         <h3>API Access Required</h3>
-        <p style="margin-bottom: 1rem;">This instance requires an API key or invite code. If you have an invite code, the operator should have set up invite-only mode.</p>
-        <p style="color: var(--color-text-muted); font-size: 14px;">Contact the operator or set INVITE_SECRET for invite-only access.</p>
+        <p style="margin-bottom: 1rem;">Trading requires an API key. You can continue browsing markets and prices as an observer.</p>
+        <a href="?" onclick="state.apiKeyRequired=false; renderApp(); return false;">Continue browsing</a>
       </div>
     `;
     return;
   }
-  if (state.inviteRequired) {
-    root.innerHTML = `
-      <div class="market-info" style="max-width: 400px; margin: 2rem auto;">
-        <h2>Invite only</h2>
-        <p style="margin-bottom: 1rem;">Enter your invite code to access the competition.</p>
-        <div class="form-group">
-          <input type="password" id="invite-code-input" placeholder="Invite code" style="width: 100%; padding: 10px; margin-bottom: 10px;" autocomplete="off">
-        </div>
-        <button type="button" onclick="submitInviteCode()">Continue</button>
-      </div>
-    `;
+
+  if (state.userMode === null) {
+    renderLanding();
+    return;
+  }
+
+  if (state.userMode === 'agent') {
+    renderAgentView();
     return;
   }
 
@@ -386,8 +575,21 @@ function renderApp() {
     return;
   }
 
-  if (!state.accountId) {
-    root.innerHTML = `
+  if (!state.accountId && state.userMode !== 'observer') {
+    root.innerHTML = state.inviteRequired
+      ? `
+      <div class="place-order">
+        <a href="?" class="back-link">&larr; All markets</a>
+        <h3>Create Account</h3>
+        <p class="form-description">An invite code is required to create an account and trade.</p>
+        <div class="form-group">
+          <input type="password" id="invite-code-input" placeholder="Invite code" style="width: 100%; padding: 10px; margin-bottom: 10px;" autocomplete="off">
+        </div>
+        <button type="button" onclick="submitInviteCode()">Continue</button>
+        <p style="margin-top: 1rem;"><a href="?" onclick="state.inviteRequired=false; state.userMode='observer'; localStorage.setItem('userMode','observer'); renderApp(); loadMarkets(); return false;">Continue browsing without account</a></p>
+      </div>
+    `
+      : `
       <div class="place-order">
         <a href="?" class="back-link">&larr; All markets</a>
         <h3>Create Account</h3>
@@ -452,7 +654,11 @@ function renderApp() {
         `).join('')}
       </div>
     </div>
-    
+    ${state.userMode === 'observer' ? `
+    <div class="observer-trade-cta">
+      <a href="#" onclick="state.userMode='trader'; localStorage.setItem('userMode','trader'); renderApp(); return false;">Create account to trade</a>
+    </div>
+    ` : `
     <div class="place-order">
       <h3>Place Order</h3>
       <form id="order-form" onsubmit="handleOrderSubmit(event)">
@@ -482,7 +688,7 @@ function renderApp() {
       </form>
       ${state.error ? `<div class="error">${state.error}</div>` : ''}
     </div>
-    
+    `}
     <div class="trades">
       <h3>Recent Trades</h3>
       <div class="trade-row trade-row-header">
@@ -533,10 +739,21 @@ window.createAccount = createAccount;
 window.handleOrderSubmit = handleOrderSubmit;
 window.togglePriceField = togglePriceField;
 window.submitInviteCode = submitInviteCode;
+window.setUserMode = setUserMode;
+window.clearUserMode = clearUserMode;
 
 // Initialize
 const marketId = new URLSearchParams(window.location.search).get('market');
-if (marketId) {
+const userMode = localStorage.getItem('userMode');
+
+if (userMode === null && !marketId) {
+  renderApp();
+  loadMarketsForLanding();
+} else if (marketId) {
+  if (userMode === null) {
+    state.userMode = 'observer';
+    localStorage.setItem('userMode', 'observer');
+  }
   loadMarket(marketId);
 } else {
   loadMarkets();

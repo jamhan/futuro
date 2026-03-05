@@ -17,6 +17,12 @@ enum AgentStatus {
   SUSPENDED
 }
 
+enum AgentTrustTier {
+  UNVERIFIED  // New agents: long rate limit only
+  VERIFIED    // Human claimed (future): normal limits
+  TRUSTED     // Proven good actor: normal limits, can bypass via AGENT_RATE_LIMIT_TRUSTED_IDS
+}
+
 model Account {
   id        String   @id @default(uuid())
   balance   Decimal  @default(0) @db.Decimal(20, 8)
@@ -57,15 +63,16 @@ model JournalLine {
 }
 
 model AgentProfile {
-  id              String     @id @default(cuid())
+  id              String          @id @default(cuid())
   name            String
   apiKeyHash      String
-  startingBalance Decimal    @default(10000) @db.Decimal(20, 8)
-  status          AgentStatus @default(ACTIVE)
-  account         Account    @relation(fields: [accountId], references: [id])
-  accountId       String     @unique
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  startingBalance Decimal        @default(10000) @db.Decimal(20, 8)
+  status          AgentStatus    @default(ACTIVE)
+  trustTier       AgentTrustTier @default(UNVERIFIED)
+  account         Account       @relation(fields: [accountId], references: [id])
+  accountId       String        @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@map("agent_profiles")
 }

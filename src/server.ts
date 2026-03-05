@@ -2,6 +2,7 @@ import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { WebSocketServer } from 'ws';
 import routes from './api/routes';
 import { agentAuthMiddleware } from './middleware/agentAuth';
@@ -22,14 +23,28 @@ app.use(express.json());
 app.use(metricsMiddleware);
 app.use(express.static(path.join(__dirname, '../public')));
 
-/** Invite-only: require X-Invite-Code header when INVITE_SECRET is set. /health stays public. */
+/** Invite-only: require X-Invite-Code for mutating requests when INVITE_SECRET is set.
+ *  GET (markets, orders, trades) are public so observers can browse without an invite.
+ *  POST /accounts, POST /orders, etc. require the invite code.
+ *  /api/agents is exempt (admin key is checked in the route). */
 if (INVITE_SECRET) {
   app.use('/api', (req, res, next) => {
+    if (req.method === 'GET') return next(); // Public read access for observers
+    if (req.path === '/agents' || req.path.startsWith('/agents/')) return next(); // Admin creates agents
     const code = req.headers['x-invite-code'] || req.query.invite;
     if (code === INVITE_SECRET) return next();
-    return res.status(401).json({ error: 'Invite code required', code: 'INVITE_REQUIRED' });
+    return res.status(401).json({ error: 'Invite code required to create account or trade', code: 'INVITE_REQUIRED' });
   });
 }
+app.get('/docs/agent/SKILL.md', (req, res) => {
+  const file = path.join(__dirname, '../docs/agent/SKILL.md');
+  if (fs.existsSync(file)) {
+    res.type('text/markdown').send(fs.readFileSync(file, 'utf-8'));
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
 app.use('/api', agentAuthMiddleware);
 app.use('/api', requireApiKeyMiddleware);
 app.use('/api', routes);

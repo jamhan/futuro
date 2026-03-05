@@ -37,6 +37,7 @@ export async function agentAuthMiddleware(
         id: profile.id,
         name: profile.name,
         accountId: profile.accountId,
+        trustTier: profile.trustTier ?? 'UNVERIFIED',
       };
       req.accountId = profile.accountId;
       return next();

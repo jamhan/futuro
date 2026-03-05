@@ -6,7 +6,7 @@
   <title>OracleBook</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --color-primary: #0d9488;
@@ -208,6 +208,38 @@
     }
     .market-detail-item strong { color: var(--color-text); margin-right: var(--space-8); }
     .market-detail-balance { color: var(--color-bid); font-weight: 500; }
+    .picker-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--space-24);
+    }
+    .picker-site-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .switch-mode-link {
+      font-size: 0.9rem;
+      color: var(--color-text-muted);
+      text-decoration: none;
+    }
+    .switch-mode-link:hover {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+    .picker-sep {
+      color: var(--color-border);
+      margin: 0 var(--space-8);
+    }
+    .observer-trade-cta {
+      margin-top: var(--space-16);
+      padding-top: var(--space-16);
+      border-top: 1px solid var(--color-border);
+    }
+    .observer-trade-cta a {
+      color: var(--color-primary);
+      font-weight: 500;
+    }
     /* Market picker: category + type tabs */
     .picker-header {
       margin-bottom: var(--space-24);
@@ -335,11 +367,186 @@
       background: var(--color-primary-bg, #ecfdf5);
       border-color: var(--color-primary);
     }
+    /* Landing + agent view (high-tech dark theme) */
+    :root {
+      --color-dark-bg: #0a0e17;
+      --color-dark-surface: #141b2d;
+      --color-dark-border: rgba(255, 255, 255, 0.06);
+      --color-dark-text: #e2e8f0;
+      --color-dark-muted: #94a3b8;
+      --color-accent: #22d3ee;
+      --color-accent-dim: rgba(34, 211, 238, 0.15);
+      --font-display: 'Space Grotesk', var(--font-sans);
+    }
+    .landing {
+      min-height: 60vh;
+      background: var(--color-dark-bg);
+      margin: calc(-1 * var(--space-24));
+      padding: var(--space-32) var(--space-24);
+      border-radius: var(--radius);
+    }
+    .landing-hero {
+      text-align: center;
+      margin-bottom: var(--space-32);
+    }
+    .landing-title {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--color-dark-text);
+      margin-bottom: var(--space-8);
+      letter-spacing: -0.02em;
+    }
+    .landing-tagline {
+      font-size: 1rem;
+      color: var(--color-dark-muted);
+      margin-bottom: var(--space-24);
+    }
+    .landing-pills {
+      display: flex;
+      justify-content: center;
+      gap: var(--space-16);
+      flex-wrap: wrap;
+    }
+    .entry-pill {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-8);
+      padding: var(--space-24) var(--space-32);
+      background: rgba(20, 27, 45, 0.8);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--color-dark-border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-family: var(--font-sans);
+      color: var(--color-dark-text);
+      transition: all 0.2s ease;
+    }
+    .entry-pill:hover {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 20px var(--color-accent-dim);
+    }
+    .entry-pill-icon {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    .entry-pill-desc {
+      font-size: 0.875rem;
+      color: var(--color-dark-muted);
+    }
+    .entry-pill-human:hover { border-color: #22d3ee; }
+    .entry-pill-agent:hover { border-color: #a78bfa; }
+    .landing-markets {
+      margin-top: var(--space-32);
+    }
+    .landing-markets-title {
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--color-dark-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: var(--space-16);
+    }
+    .market-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: var(--space-16);
+    }
+    .market-preview-card {
+      display: block;
+      padding: var(--space-24);
+      background: var(--color-dark-surface);
+      border: 1px solid var(--color-dark-border);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: var(--color-dark-text);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .market-preview-card:hover {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 16px var(--color-accent-dim);
+    }
+    .market-preview-location {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: var(--space-4);
+    }
+    .market-preview-type {
+      font-size: 0.8rem;
+      color: var(--color-dark-muted);
+      margin-bottom: var(--space-8);
+    }
+    .market-preview-price {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--color-accent);
+      margin-bottom: var(--space-4);
+    }
+    .market-preview-date {
+      font-size: 0.75rem;
+      color: var(--color-dark-muted);
+    }
+    .market-preview-empty {
+      color: var(--color-dark-muted);
+      font-size: 0.9rem;
+    }
+    .agent-view {
+      padding-top: var(--space-16);
+    }
+    .agent-view-panel {
+      background: var(--color-dark-surface);
+      padding: var(--space-24);
+      border-radius: var(--radius);
+      border: 1px solid var(--color-dark-border);
+      max-width: 640px;
+    }
+    .agent-view-panel h2 {
+      font-family: var(--font-display);
+      margin-bottom: var(--space-8);
+    }
+    .agent-view-desc {
+      color: var(--color-text-muted);
+      margin-bottom: var(--space-16);
+    }
+    .agent-view-panel h4 {
+      margin-top: var(--space-24);
+      margin-bottom: var(--space-8);
+      font-size: 0.95rem;
+    }
+    .agent-code {
+      background: #0f172a;
+      padding: var(--space-16);
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      margin: var(--space-12) 0;
+      font-size: 13px;
+      border: 1px solid var(--color-dark-border);
+    }
+    .agent-code code {
+      font-family: var(--font-mono);
+      color: var(--color-dark-text);
+    }
+    .agent-endpoints {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .agent-endpoints td {
+      padding: var(--space-8) var(--space-12);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .agent-endpoints td:first-child {
+      font-family: var(--font-mono);
+      color: var(--color-primary);
+      width: 60px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>OracleBook</h1>
     <div id="root"></div>
   </div>
   <script type="module" src="/app.js"></script>
