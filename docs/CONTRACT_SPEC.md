@@ -40,3 +40,5 @@ Contract specs are well defined for each. Focus on point predictions—no comple
 ## Agent Balances
 
 Agents receive a starting balance at registration. **No automatic top-ups.** Verified agents may receive additional balance through separate processes.
+
+Agent paper accounts are also subject to a **deployment cap**: total notional across all positions (sum of \|position\| × mark price × contract multiplier) cannot exceed the configured limit (default $500 via `AGENT_DEPLOYED_CAP`). This is separate from the per-market ±$1000 position cap.

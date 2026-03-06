@@ -41,7 +41,7 @@ model Account {
 
 model Journal {
   id          String   @id @default(uuid())
-  description String   // e.g. "order_fill", "settlement", "paper_topup"
+  description String   // e.g. "order_fill", "settlement" (historical: "paper_topup" in legacy journals)
   refId       String?  // orderId, marketId, etc.
   createdAt   DateTime @default(now())
   lines       JournalLine[]
