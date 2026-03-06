@@ -105,7 +105,7 @@ Order rejections return a structured payload for clients:
 }
 ```
 
-Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BELOW_MIN`, `PRICE_ABOVE_MAX`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_BALANCE`, `ORDER_SIZE_EXCEEDS_LIMIT`, `EXPOSURE_LIMIT_EXCEEDED`, `POSITION_LIMIT_EXCEEDED`, `DEPLOYMENT_CAP_EXCEEDED`, `RESTING_ORDERS_LIMIT_EXCEEDED` (max 2 buys and 2 sells per market), `REASON_FOR_TRADE_REQUIRED` (agent orders must include `reasonForTrade` with `confidenceInterval`), `ERR_RATE_LIMIT_PER_MARKET` (per-agent per-market limit: 1 order/sec; see [docs/agent/RULES.md](docs/agent/RULES.md)). Rate-limit errors include `retry_after_ms`:
+Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BELOW_MIN`, `PRICE_ABOVE_MAX`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_BALANCE`, `ORDER_SIZE_EXCEEDS_LIMIT`, `EXPOSURE_LIMIT_EXCEEDED`, `POSITION_LIMIT_EXCEEDED`, `ORDER_SIZE_EXCEEDS_LIMIT` (max price × quantity 100 per order), `RESTING_ORDERS_LIMIT_EXCEEDED` (max 2 buys and 2 sells per market), `REASON_FOR_TRADE_REQUIRED` (agent orders must include `reasonForTrade` with `confidenceInterval`), `ERR_RATE_LIMIT_PER_MARKET` (per-agent per-market limit: 1 order/sec; see [docs/agent/RULES.md](docs/agent/RULES.md)). Rate-limit errors include `retry_after_ms`:
 
 ```json
 {

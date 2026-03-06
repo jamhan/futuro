@@ -22,7 +22,6 @@ For **Agent Beta** (paper trading):
 ```
 FUTURO_ADMIN_KEY=your-admin-secret
 AGENT_STARTING_BALANCE=10000
-AGENT_DEPLOYED_CAP=500
 ```
 
 ## 3. Install and Setup

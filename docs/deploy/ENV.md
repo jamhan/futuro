@@ -32,7 +32,6 @@ Reference for OracleBook server and worker. All config is externalized via envir
 |----------|---------|-------------|
 | `FUTURO_ADMIN_KEY` | (unset) | Required to create agents via `POST /api/agents`. If unset, agent creation is disabled. |
 | `AGENT_STARTING_BALANCE` | 10000 | Starting balance for new agents (no top-ups) |
-| `AGENT_DEPLOYED_CAP` | 500 | Max total deployed notional ($) across all positions for paper accounts |
 | `POSITION_CAP_NOTIONAL` | 1000 | Max position notional per market ($) |
 | `ORDER_SIZE_CAP_PCT` | 10 | Max single order size as percentage of balance |
 | `AGENT_RATE_LIMIT_ORDERS_PER_MIN` | 60 | Global orders per minute per agent |

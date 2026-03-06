@@ -85,6 +85,44 @@ describe('API', () => {
         });
       expect(res.status).toBe(400);
     });
+
+    it('returns 400 ORDER_SIZE_EXCEEDS_LIMIT when price × quantity exceeds 100', async () => {
+      const account = await prisma.account.create({ data: { balance: 50000, isPaper: false } });
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Order size test',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      // price 0.5 × quantity 250 = 125, exceeds 100
+      const orderRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .send({
+          accountId: account.id,
+          marketId,
+          side: 'BUY_YES',
+          type: 'LIMIT',
+          price: 0.5,
+          quantity: 250,
+        });
+
+      expect(orderRes.status).toBe(400);
+      expect(orderRes.body.error).toMatchObject({
+        code: 'ORDER_SIZE_EXCEEDS_LIMIT',
+        message: expect.stringMatching(/exceed max 100/),
+      });
+
+      await prisma.account.delete({ where: { id: account.id } });
+      await prisma.market.delete({ where: { id: marketId } });
+    });
   });
 
   describe('POST /api/agents', () => {
@@ -486,61 +524,6 @@ describe('API', () => {
         ? orderRes.body.error.map((e: { message?: string }) => e.message).join(' ')
         : JSON.stringify(orderRes.body.error);
       expect(errMsgs).toMatch(/lower <= upper/);
-    });
-
-    it('returns 400 DEPLOYMENT_CAP_EXCEEDED when paper account would exceed $500 deployed', async () => {
-      const agentRes = await request(app)
-        .post('/api/agents')
-        .set('Content-Type', 'application/json')
-        .set('Authorization', `Bearer ${ADMIN_KEY}`)
-        .send({ name: 'deploy-cap-agent' });
-      const agentKey = agentRes.body.apiKey;
-      const accountId = agentRes.body.accountId;
-      await promoteAgentToTrusted(accountId);
-
-      // Create OPEN futures market via Prisma (API does not support minPrice/maxPrice/contractMultiplier)
-      const market = await prisma.market.create({
-        data: {
-          description: 'Deployment cap test market',
-          location: 'Test',
-          eventDate: new Date(Date.now() + 86400000),
-          condition: 'rainfall >= 10mm',
-          state: 'OPEN',
-          marketType: 'FUTURES',
-          indexType: 'weather_rainfall',
-          indexId: 'test-station',
-          minPrice: 0,
-          maxPrice: 100,
-          contractMultiplier: 1,
-        },
-      });
-      const marketId = market.id;
-
-      // 10 contracts @ 60 = 600 notional, exceeds default AGENT_DEPLOYED_CAP of 500
-      const orderRes = await request(app)
-        .post('/api/orders')
-        .set('Content-Type', 'application/json')
-        .set('X-Agent-Key', agentKey)
-        .send({
-          marketId,
-          side: 'BUY',
-          type: 'LIMIT',
-          price: 60,
-          quantity: 10,
-          reasonForTrade: {
-            reason: 'Test deployment cap',
-            theoreticalPriceMethod: 'Test',
-            confidenceInterval: [50, 70],
-          },
-        });
-
-      expect(orderRes.status).toBe(400);
-      expect(orderRes.body.error).toMatchObject({
-        code: 'DEPLOYMENT_CAP_EXCEEDED',
-        message: expect.stringMatching(/exceed cap/),
-      });
-
-      await prisma.market.delete({ where: { id: marketId } });
     });
 
     it('places order using X-Agent-Key (no accountId in body)', async () => {

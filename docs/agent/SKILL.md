@@ -68,6 +68,7 @@ Do not send `accountId`; it is derived from your API key.
 
 - **Direction**: BUY if you expect the index to be **higher** at settlement; SELL if you expect it **lower**.
 - **Settlement**: Payout = `quantity × indexValue`. Long (positive position) gets credited; short (negative position) gets debited.
+- **Order size**: Max notional (price × quantity) of 100 per order.
 - **Order types**: LIMIT = specify your price; MARKET = take best available.
 - **Cancellation**: Use `DELETE /api/orders/:id` to cancel resting orders when your view changes. PENDING and PARTIALLY_FILLED orders can be cancelled; FILLED and CANCELLED cannot.
 

@@ -6,7 +6,6 @@ import { OrderRepository } from '../repositories/orderRepository';
 import { TradeRepository } from '../repositories/tradeRepository';
 import { AccountRepository } from '../repositories/accountRepository';
 import { LedgerService } from './ledgerService';
-import { DeploymentService } from './deploymentService';
 import { broadcast } from './wsBroadcast';
 import { MatchingEngine, OrderBook } from '../engine/matching';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
@@ -30,7 +29,6 @@ export class ExchangeService {
   private tradeRepo = new TradeRepository();
   private accountRepo = new AccountRepository();
   private ledgerService = new LedgerService();
-  private deploymentService = new DeploymentService();
   private prisma = getPrismaClient();
 
   /**
@@ -96,6 +94,21 @@ export class ExchangeService {
       }
     }
 
+    // Max order notional: price × quantity cannot exceed 100
+    const MAX_ORDER_NOTIONAL = 100;
+    const orderPrice =
+      input.type === 'LIMIT' && input.price != null
+        ? input.price
+        : new Decimal((market.maxPrice ?? 100).toString());
+    const notional = orderPrice.times(input.quantity);
+    if (notional.gt(MAX_ORDER_NOTIONAL)) {
+      throw new OrderRejectionError(
+        ORDER_REJECTION_CODES.ORDER_SIZE_EXCEEDS_LIMIT,
+        `Order notional (price × quantity) ${notional} would exceed max ${MAX_ORDER_NOTIONAL}`,
+        { maxNotional: MAX_ORDER_NOTIONAL, notional: notional.toNumber() }
+      );
+    }
+
     // Check account balance (for buy orders)
     const account = await this.accountRepo.findById(input.accountId);
     if (!account) {
@@ -112,30 +125,6 @@ export class ExchangeService {
       const cost = price.times(input.quantity);
       if (account.balance.lt(cost)) {
         throw new OrderRejectionError(ORDER_REJECTION_CODES.INSUFFICIENT_BALANCE, 'Insufficient balance');
-      }
-
-      // Deployment cap: paper accounts cannot exceed AGENT_DEPLOYED_CAP total notional across all positions
-      if (account.isPaper) {
-        const mult = new Decimal((market.contractMultiplier ?? 1).toString());
-        const currentPos = await this.accountRepo.getPosition(input.accountId, input.marketId);
-        const currentQty = currentPos?.quantity ?? new Decimal(0);
-        const postTradeQty = currentQty.plus(input.quantity);
-        const orderPrice = input.price ?? new Decimal((market.maxPrice ?? 100).toString());
-        const increaseInExposure = postTradeQty.abs().minus(currentQty.abs());
-        const additionalNotional = increaseInExposure.gt(0)
-          ? increaseInExposure.times(orderPrice).times(mult)
-          : new Decimal(0);
-        if (additionalNotional.gt(0)) {
-          const wouldExceed = await this.deploymentService.wouldExceedCap(input.accountId, additionalNotional);
-          if (wouldExceed) {
-            const cap = this.deploymentService.getCap();
-            throw new OrderRejectionError(
-              ORDER_REJECTION_CODES.DEPLOYMENT_CAP_EXCEEDED,
-              `Deployed notional would exceed cap of $${cap}`,
-              { cap: cap.toNumber() }
-            );
-          }
-        }
       }
     }
 

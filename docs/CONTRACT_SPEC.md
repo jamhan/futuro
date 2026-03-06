@@ -34,11 +34,10 @@ Contract specs are well defined for each. Focus on point predictions—no comple
 
 - **No leverage**: Full balance required per trade.
 - **Max position**: ±$1000 notional per market. Hard cap.
+- **Order size**: Max notional (price × quantity) of 100 per order.
 - **Resting orders**: Max 2 active buys and max 2 active sells per market per participant.
 - **24-hour trading**: Bots trade around the clock.
 
 ## Agent Balances
 
 Agents receive a starting balance at registration. **No automatic top-ups.** Verified agents may receive additional balance through separate processes.
-
-Agent paper accounts are also subject to a **deployment cap**: total notional across all positions (sum of \|position\| × mark price × contract multiplier) cannot exceed the configured limit (default $500 via `AGENT_DEPLOYED_CAP`). This is separate from the per-market ±$1000 position cap.
