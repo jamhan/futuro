@@ -401,6 +401,148 @@ describe('API', () => {
       expect(orderRes.body.code).toBe('REASON_FOR_TRADE_REQUIRED');
     });
 
+    it('returns 400 when agent omits confidenceInterval in reasonForTrade', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'no-confidence-agent' });
+      const agentKey = agentRes.body.apiKey;
+      await promoteAgentToTrusted(agentRes.body.accountId);
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Test no confidence',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      const orderRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({
+          marketId,
+          side: 'BUY_YES',
+          type: 'LIMIT',
+          price: 0.5,
+          quantity: 5,
+          reasonForTrade: { reason: 'Test', theoreticalPriceMethod: 'Test' },
+        });
+
+      expect(orderRes.status).toBe(400);
+      expect(orderRes.body.code).toBe('REASON_FOR_TRADE_REQUIRED');
+      expect(orderRes.body.error).toContain('confidenceInterval');
+    });
+
+    it('returns 400 when confidenceInterval has lower > upper', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'bad-confidence-agent' });
+      const agentKey = agentRes.body.apiKey;
+      await promoteAgentToTrusted(agentRes.body.accountId);
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Test bad confidence',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      const orderRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({
+          marketId,
+          side: 'BUY_YES',
+          type: 'LIMIT',
+          price: 0.5,
+          quantity: 5,
+          reasonForTrade: {
+            reason: 'Test',
+            theoreticalPriceMethod: 'Test',
+            confidenceInterval: [0.8, 0.2], // invalid: lower > upper
+          },
+        });
+
+      expect(orderRes.status).toBe(400);
+      expect(orderRes.body.error).toBeDefined();
+      const errMsgs = Array.isArray(orderRes.body.error)
+        ? orderRes.body.error.map((e: { message?: string }) => e.message).join(' ')
+        : JSON.stringify(orderRes.body.error);
+      expect(errMsgs).toMatch(/lower <= upper/);
+    });
+
+    it('returns 400 DEPLOYMENT_CAP_EXCEEDED when paper account would exceed $500 deployed', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'deploy-cap-agent' });
+      const agentKey = agentRes.body.apiKey;
+      const accountId = agentRes.body.accountId;
+      await promoteAgentToTrusted(accountId);
+
+      // Create OPEN futures market via Prisma (API does not support minPrice/maxPrice/contractMultiplier)
+      const market = await prisma.market.create({
+        data: {
+          description: 'Deployment cap test market',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000),
+          condition: 'rainfall >= 10mm',
+          state: 'OPEN',
+          marketType: 'FUTURES',
+          indexType: 'weather_rainfall',
+          indexId: 'test-station',
+          minPrice: 0,
+          maxPrice: 100,
+          contractMultiplier: 1,
+        },
+      });
+      const marketId = market.id;
+
+      // 10 contracts @ 60 = 600 notional, exceeds default AGENT_DEPLOYED_CAP of 500
+      const orderRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({
+          marketId,
+          side: 'BUY',
+          type: 'LIMIT',
+          price: 60,
+          quantity: 10,
+          reasonForTrade: {
+            reason: 'Test deployment cap',
+            theoreticalPriceMethod: 'Test',
+            confidenceInterval: [50, 70],
+          },
+        });
+
+      expect(orderRes.status).toBe(400);
+      expect(orderRes.body.error).toMatchObject({
+        code: 'DEPLOYMENT_CAP_EXCEEDED',
+        message: expect.stringMatching(/exceed cap/),
+      });
+
+      await prisma.market.delete({ where: { id: marketId } });
+    });
+
     it('places order using X-Agent-Key (no accountId in body)', async () => {
       const agentRes = await request(app)
         .post('/api/agents')
@@ -696,8 +838,13 @@ describe('API', () => {
           type: 'LIMIT',
           price: 0.5,
           quantity: 10,
-          reasonForTrade: { reason: 'test', theoreticalPriceMethod: 'na' },
+          reasonForTrade: {
+            reason: 'test',
+            theoreticalPriceMethod: 'na',
+            confidenceInterval: [0.4, 0.6],
+          },
         });
+      expect(orderRes.status).toBe(201);
       const orderId = orderRes.body.order?.id ?? orderRes.body.id;
 
       const cancelRes = await request(app)
