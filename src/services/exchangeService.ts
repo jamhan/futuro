@@ -6,6 +6,7 @@ import { OrderRepository } from '../repositories/orderRepository';
 import { TradeRepository } from '../repositories/tradeRepository';
 import { AccountRepository } from '../repositories/accountRepository';
 import { LedgerService } from './ledgerService';
+import { DeploymentService } from './deploymentService';
 import { broadcast } from './wsBroadcast';
 import { MatchingEngine, OrderBook } from '../engine/matching';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
@@ -29,6 +30,7 @@ export class ExchangeService {
   private tradeRepo = new TradeRepository();
   private accountRepo = new AccountRepository();
   private ledgerService = new LedgerService();
+  private deploymentService = new DeploymentService();
   private prisma = getPrismaClient();
 
   /**
@@ -112,6 +114,29 @@ export class ExchangeService {
         throw new OrderRejectionError(ORDER_REJECTION_CODES.INSUFFICIENT_BALANCE, 'Insufficient balance');
       }
 
+      // Deployment cap: paper accounts cannot exceed AGENT_DEPLOYED_CAP total notional across all positions
+      if (account.isPaper) {
+        const mult = new Decimal((market.contractMultiplier ?? 1).toString());
+        const currentPos = await this.accountRepo.getPosition(input.accountId, input.marketId);
+        const currentQty = currentPos?.quantity ?? new Decimal(0);
+        const postTradeQty = currentQty.plus(input.quantity);
+        const orderPrice = input.price ?? new Decimal((market.maxPrice ?? 100).toString());
+        const increaseInExposure = postTradeQty.abs().minus(currentQty.abs());
+        const additionalNotional = increaseInExposure.gt(0)
+          ? increaseInExposure.times(orderPrice).times(mult)
+          : new Decimal(0);
+        if (additionalNotional.gt(0)) {
+          const wouldExceed = await this.deploymentService.wouldExceedCap(input.accountId, additionalNotional);
+          if (wouldExceed) {
+            const cap = this.deploymentService.getCap();
+            throw new OrderRejectionError(
+              ORDER_REJECTION_CODES.DEPLOYMENT_CAP_EXCEEDED,
+              `Deployed notional would exceed cap of $${cap}`,
+              { cap: cap.toNumber() }
+            );
+          }
+        }
+      }
     }
 
     // Max position: ±$1000 notional per market (futures/OSS)
@@ -135,6 +160,28 @@ export class ExchangeService {
           { cap: MAX_POSITION_NOTIONAL, postNotional: postNotional.toNumber() }
         );
       }
+    }
+
+    // Max 2 resting buys or 2 resting sells per account per market
+    const MAX_RESTING_PER_SIDE = 2;
+    const { buy: restingBuys, sell: restingSells } = await this.orderRepo.countRestingByAccountAndMarket(
+      input.accountId,
+      input.marketId
+    );
+    const isBuyOrder = [OrderSide.BUY, OrderSide.BUY_YES, OrderSide.BUY_NO].includes(input.side);
+    if (isBuyOrder && restingBuys >= MAX_RESTING_PER_SIDE) {
+      throw new OrderRejectionError(
+        ORDER_REJECTION_CODES.RESTING_ORDERS_LIMIT_EXCEEDED,
+        `Max ${MAX_RESTING_PER_SIDE} active buy orders per market (you have ${restingBuys})`,
+        { limit: MAX_RESTING_PER_SIDE, current: restingBuys, side: 'buy' }
+      );
+    }
+    if (!isBuyOrder && restingSells >= MAX_RESTING_PER_SIDE) {
+      throw new OrderRejectionError(
+        ORDER_REJECTION_CODES.RESTING_ORDERS_LIMIT_EXCEEDED,
+        `Max ${MAX_RESTING_PER_SIDE} active sell orders per market (you have ${restingSells})`,
+        { limit: MAX_RESTING_PER_SIDE, current: restingSells, side: 'sell' }
+      );
     }
 
     // Create order

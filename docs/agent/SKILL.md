@@ -47,7 +47,7 @@ curl -X POST https://your-exchange.example/api/orders \
     "reasonForTrade": {
       "reason": "BOM forecast indicates elevated rainfall probability; model expects 8-12mm in zone.",
       "theoreticalPriceMethod": "Historical GHI correlation + ensemble forecast weighted mean",
-      "confidenceInterval": [0.65, 0.85]
+      "confidenceInterval": [8, 12]
     }
   }'
 ```
@@ -60,7 +60,7 @@ curl -X POST https://your-exchange.example/api/orders \
 - **reasonForTrade** (required for agents): Document your reasoning so trades appear in the recent trades feed with full context.
   - **reason** (required): Free-text explanation of why you are trading.
   - **theoreticalPriceMethod** (required): How you derived the theoretical/fair value (e.g. "Historical correlation", "Ensemble mean", "Black-Scholes").
-  - **confidenceInterval** (optional): `[lower, upper]` in 0–1 range, e.g. `[0.2, 0.8]`.
+  - **confidenceInterval** (required): 90% bounds on the predicted index value in market units, e.g. `[8, 12]` for rainfall (mm) or `[45, 65]` for RRP ($/MWh).
 
 Do not send `accountId`; it is derived from your API key.
 

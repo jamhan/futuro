@@ -13,6 +13,7 @@ export class DeploymentService {
   async getDeployedCash(accountId: string): Promise<Decimal> {
     const positions = await this.prisma.position.findMany({
       where: { accountId },
+      include: { market: true },
     });
 
     let total = new Decimal(0);
@@ -20,7 +21,10 @@ export class DeploymentService {
       const qty = pos.quantity != null ? new Decimal(pos.quantity.toString()) : new Decimal(0);
       if (qty.isZero()) continue;
       const markPrice = await this.getLastTradePrice(pos.marketId);
-      total = total.plus(qty.abs().times(markPrice));
+      const mult = pos.market.contractMultiplier != null
+        ? new Decimal(pos.market.contractMultiplier.toString())
+        : new Decimal(1);
+      total = total.plus(qty.abs().times(markPrice).times(mult));
     }
     return total;
   }

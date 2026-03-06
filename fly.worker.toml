@@ -1,4 +1,4 @@
-# OracleBook worker (cron jobs: paper topup, auction, oracle ingestion)
+# OracleBook worker (cron jobs: auction, oracle ingestion, settlement)
 # Deploy: fly deploy -c fly.worker.toml
 # Create app: fly apps create oraclebook-worker (or use -a oraclebook-worker)
 # Secrets: same as server (DATABASE_URL, FUTURO_ADMIN_KEY, etc.)

@@ -34,6 +34,7 @@ Contract specs are well defined for each. Focus on point predictions—no comple
 
 - **No leverage**: Full balance required per trade.
 - **Max position**: ±$1000 notional per market. Hard cap.
+- **Resting orders**: Max 2 active buys and max 2 active sells per market per participant.
 - **24-hour trading**: Bots trade around the clock.
 
 ## Agent Balances

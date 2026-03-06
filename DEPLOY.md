@@ -20,7 +20,7 @@ OracleBook runs **two processes**:
 - **systemd**: `Restart=on-failure` and `RestartSec=5` for both services.
 - **Railway/Render**: Deploy server and worker as separate services; both use same `DATABASE_URL` and config.
 
-**Env parity:** Server and worker must share `DATABASE_URL`, `AGENT_TOPUP_THRESHOLD`, `AUCTION_CRON`, `FUTURO_ADMIN_KEY` (if used). Run `./scripts/check-env.sh` to validate before deploy. For Fly.io, see `fly.toml` and `docs/deploy/RUNBOOKS.md`.
+**Env parity:** Server and worker must share `DATABASE_URL`, `AUCTION_CRON`, `FUTURO_ADMIN_KEY` (if used). Run `./scripts/check-env.sh` to validate before deploy. For Fly.io, see `fly.toml` and `docs/deploy/RUNBOOKS.md`.
 
 ---
 

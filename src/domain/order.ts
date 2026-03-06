@@ -36,7 +36,7 @@ export interface Order {
  * Ensures agents document their reasoning and methodology.
  */
 export interface ReasonForTrade {
-  confidenceInterval?: [number, number]; // e.g. [0.2, 0.8]
+  confidenceInterval?: [number, number]; // 90% bounds on predicted index value in market units, e.g. [8, 12] for mm rainfall
   reason: string;
   theoreticalPriceMethod: string;
 }

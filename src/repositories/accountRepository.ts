@@ -88,11 +88,13 @@ export class AccountRepository {
   private toDomain(dbAccount: {
     id: string;
     balance: any;
+    isPaper?: boolean;
     createdAt: Date;
   }): Account {
     return {
       id: dbAccount.id,
       balance: new Decimal(dbAccount.balance.toString()),
+      isPaper: dbAccount.isPaper ?? false,
       createdAt: dbAccount.createdAt,
     };
   }

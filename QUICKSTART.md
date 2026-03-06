@@ -21,8 +21,8 @@ PORT=3000
 For **Agent Beta** (paper trading):
 ```
 FUTURO_ADMIN_KEY=your-admin-secret
-AGENT_TOPUP_THRESHOLD=2000
 AGENT_STARTING_BALANCE=10000
+AGENT_DEPLOYED_CAP=500
 ```
 
 ## 3. Install and Setup

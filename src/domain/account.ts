@@ -13,6 +13,7 @@ export type { AccountId };
 export interface Account {
   id: AccountId;
   balance: Decimal; // Cash balance
+  isPaper?: boolean; // True for agent (paper trading) accounts
   createdAt: Date;
 }
 

@@ -49,6 +49,25 @@ export class OrderRepository {
     return orders.map(this.toDomain);
   }
 
+  /** Count resting (PENDING or PARTIALLY_FILLED) orders by account and market, split by buy/sell. */
+  async countRestingByAccountAndMarket(
+    accountId: string,
+    marketId: MarketId
+  ): Promise<{ buy: number; sell: number }> {
+    const resting = await this.prisma.order.findMany({
+      where: {
+        accountId,
+        marketId,
+        status: { in: [OrderStatus.PENDING, OrderStatus.PARTIALLY_FILLED] },
+      },
+      select: { side: true },
+    });
+    const BUY_SIDES = ['BUY', 'BUY_YES', 'BUY_NO'];
+    const buy = resting.filter((o) => BUY_SIDES.includes(o.side)).length;
+    const sell = resting.filter((o) => o.side === 'SELL').length;
+    return { buy, sell };
+  }
+
   async update(order: Order): Promise<Order> {
     // Prisma will automatically update updatedAt due to @updatedAt in schema
     const updated = await this.prisma.order.update({
