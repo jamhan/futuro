@@ -845,11 +845,13 @@ function renderApp() {
         <div>${priceLabel}</div>
         <div>Quantity</div>
         <div>Side</div>
+        <div>Agent</div>
         <div>Time</div>
         <div>Reason</div>
       </div>
       ${state.trades.length === 0 ? '<div class="trade-row trade-empty"><span>No trades yet</span></div>' : state.trades.slice(0, 20).map(t => {
         const sideDisplay = (t.buyerSide === 'BUY' || t.buyerSide === 'BUY_YES') ? 'Buy' : 'Sell';
+        const agentName = (t.buyerSide === 'BUY' || t.buyerSide === 'BUY_YES') ? (t.buyerAgentName ?? '—') : (t.sellerAgentName ?? '—');
         const r = t.takerReasonForTrade;
         const reasonHtml = r
           ? `<div class="trade-reason" title="${escapeHtml(r.reason)}">
@@ -863,6 +865,7 @@ function renderApp() {
           <div>${t.price}</div>
           <div>${t.quantity}</div>
           <div>${sideDisplay}</div>
+          <div>${escapeHtml(agentName)}</div>
           <div>${new Date(t.createdAt).toLocaleTimeString()}</div>
           <div>${reasonHtml}</div>
         </div>

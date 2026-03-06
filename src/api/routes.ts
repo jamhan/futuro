@@ -362,7 +362,24 @@ router.get('/markets/:marketId/trades', async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
     const trades = await tradeRepo.findByMarket(req.params.marketId, limit);
-    res.json(trades);
+    const accountIds = [
+      ...new Set(trades.flatMap((t) => [t.buyerAccountId, t.sellerAccountId])),
+    ];
+    const agentProfiles = await prisma.agentProfile.findMany({
+      where: { accountId: { in: accountIds } },
+      select: { accountId: true, name: true },
+    });
+    const accountToName = Object.fromEntries(
+      agentProfiles.map((p) => [p.accountId, p.name])
+    );
+    const tradesWithNames = trades.map((t) => ({
+      ...t,
+      price: t.price.toString(),
+      quantity: t.quantity.toString(),
+      buyerAgentName: accountToName[t.buyerAccountId] ?? null,
+      sellerAgentName: accountToName[t.sellerAccountId] ?? null,
+    }));
+    res.json(tradesWithNames);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
