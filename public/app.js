@@ -402,6 +402,7 @@ function renderAgentView() {
   if (!root) return;
   const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
   root.innerHTML = `
+    <div class="page-dark">
     <div class="agent-view">
       <a href="?" class="back-link" onclick="clearUserMode(); return false;">&larr; Switch mode</a>
       <div class="agent-view-panel">
@@ -424,6 +425,7 @@ function renderAgentView() {
           <tr><td>DELETE</td><td>/api/orders/:id</td><td>Cancel order</td></tr>
         </table>
       </div>
+    </div>
     </div>
   `;
 }
@@ -672,10 +674,12 @@ function renderApp() {
 
   if (state.apiKeyRequired) {
     root.innerHTML = `
-      <div class="market-info">
-        <h3>API Access Required</h3>
-        <p style="margin-bottom: 1rem;">Trading requires an API key. You can continue browsing markets and prices as an observer.</p>
-        <a href="?" onclick="state.apiKeyRequired=false; renderApp(); return false;">Continue browsing</a>
+      <div class="page-dark">
+        <div class="market-info">
+          <h3>API Access Required</h3>
+          <p style="margin-bottom: 1rem;">Trading requires an API key. You can continue browsing markets and prices as an observer.</p>
+          <a href="?" onclick="state.apiKeyRequired=false; renderApp(); return false;">Continue browsing</a>
+        </div>
       </div>
     `;
     return;
@@ -695,13 +699,13 @@ function renderApp() {
     const marketId = new URLSearchParams(window.location.search).get('market');
     if (marketId) {
       loadMarket(marketId);
-      root.innerHTML = '<div>Loading market...</div>';
+      root.innerHTML = '<div class="page-dark"><div class="loading-state">Loading market...</div></div>';
     } else {
       if (state.markets.length === 0) {
         loadMarkets();
-        root.innerHTML = '<div>Loading markets...</div>';
+        root.innerHTML = '<div class="page-dark"><div class="loading-state">Loading markets...</div></div>';
       } else {
-        root.innerHTML = renderMarketPicker(state.markets);
+        root.innerHTML = '<div class="page-dark">' + renderMarketPicker(state.markets) + '</div>';
         attachPickerListeners();
       }
     }
@@ -711,6 +715,7 @@ function renderApp() {
   if (!state.accountId && state.userMode !== 'observer') {
     root.innerHTML = state.inviteRequired
       ? `
+      <div class="page-dark">
       <div class="place-order">
         <a href="?" class="back-link">&larr; All markets</a>
         <h3>Create Account</h3>
@@ -721,13 +726,16 @@ function renderApp() {
         <button type="button" onclick="submitInviteCode()">Continue</button>
         <p style="margin-top: 1rem;"><a href="?" onclick="state.inviteRequired=false; state.userMode='observer'; localStorage.setItem('userMode','observer'); renderApp(); loadMarkets(); return false;">Continue browsing without account</a></p>
       </div>
+      </div>
     `
       : `
+      <div class="page-dark">
       <div class="place-order">
         <a href="?" class="back-link">&larr; All markets</a>
         <h3>Create Account</h3>
         <p class="form-description">You need an account to trade. Starting balance: $1,000</p>
         <button type="button" onclick="createAccount()">Create Account</button>
+      </div>
       </div>
     `;
     return;
@@ -746,6 +754,7 @@ function renderApp() {
   const shortTitle = `${state.market.location}: ${typeLabel} · ${periodLabel}`;
   const descriptionHtml = formatMarketDescription(state.market.description);
   root.innerHTML = `
+    <div class="page-dark">
     <div class="market-detail-header">
       <div class="market-detail-nav">
         <a href="?" class="back-link">&larr; All markets</a>
@@ -870,6 +879,7 @@ function renderApp() {
           <div>${reasonHtml}</div>
         </div>
       `}).join('')}
+    </div>
     </div>
   `;
 }

@@ -46,6 +46,11 @@
       color: var(--color-text);
       padding: var(--space-24);
     }
+    body:has(.page-dark),
+    body:has(.landing) {
+      background: var(--color-dark-bg);
+      color: var(--color-dark-text);
+    }
     .container {
       max-width: 1400px;
       margin: 0 auto;
@@ -716,6 +721,269 @@
       font-family: var(--font-mono);
       color: var(--color-primary);
       width: 60px;
+    }
+    /* Page-dark: market picker & detail (OracleBook-style alignment) */
+    .page-dark {
+      min-height: 60vh;
+      background: var(--color-dark-bg);
+      margin: calc(-1 * var(--space-24));
+      padding: var(--space-32) var(--space-24);
+      border-radius: var(--radius);
+    }
+    .page-dark .market-info {
+      background: var(--color-dark-surface);
+      border-color: var(--color-dark-border);
+      box-shadow: none;
+      color: var(--color-dark-text);
+    }
+    .page-dark .market-info h2,
+    .page-dark .market-info h3 {
+      color: var(--color-dark-text);
+    }
+    .page-dark .market-info p {
+      color: var(--color-dark-muted);
+    }
+    .page-dark .market-info a {
+      color: var(--color-accent);
+    }
+    .page-dark .market-detail-header {
+      background: var(--color-dark-surface);
+      border-color: var(--color-dark-border);
+      box-shadow: none;
+    }
+    .page-dark .market-detail-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-12);
+    }
+    .page-dark .back-link,
+    .page-dark .nav-docs-link,
+    .page-dark .landing-docs-link {
+      color: var(--color-accent);
+    }
+    .page-dark .market-detail-title {
+      color: var(--color-dark-text);
+    }
+    .page-dark .market-detail-description {
+      background: rgba(0, 0, 0, 0.2);
+      border-left-color: var(--color-accent);
+      color: var(--color-dark-muted);
+    }
+    .page-dark .market-detail-description .market-desc-lead {
+      color: var(--color-dark-text);
+    }
+    .page-dark .market-detail-description .market-desc-label {
+      color: var(--color-dark-text);
+    }
+    .page-dark .market-detail-description .market-desc-link {
+      color: var(--color-accent);
+    }
+    .page-dark .market-detail-item {
+      color: var(--color-dark-muted);
+    }
+    .page-dark .market-detail-item strong {
+      color: var(--color-dark-text);
+    }
+    .page-dark .order-side {
+      background: var(--color-dark-surface);
+      border-color: var(--color-dark-border);
+      box-shadow: none;
+    }
+    .page-dark .order-side h3 {
+      color: var(--color-dark-text);
+    }
+    .page-dark .order-side.bids h3 { color: #34d399; }
+    .page-dark .order-side.asks h3 { color: #f87171; }
+    .page-dark .order-row {
+      border-bottom-color: var(--color-dark-border);
+      color: var(--color-dark-text);
+    }
+    .page-dark .order-row.header {
+      background: rgba(0, 0, 0, 0.3);
+      color: var(--color-dark-muted);
+    }
+    .page-dark .order-side.bids .order-row:not(.header):not(.order-empty):hover {
+      background: rgba(52, 211, 153, 0.1);
+    }
+    .page-dark .order-side.asks .order-row:not(.header):not(.order-empty):hover {
+      background: rgba(248, 113, 113, 0.1);
+    }
+    .page-dark .order-empty {
+      color: var(--color-dark-muted);
+    }
+    .page-dark .place-order {
+      background: var(--color-dark-surface);
+      border-color: var(--color-dark-border);
+      box-shadow: none;
+    }
+    .page-dark .place-order h3 {
+      color: var(--color-dark-text);
+    }
+    .page-dark .form-description {
+      color: var(--color-dark-muted);
+    }
+    .page-dark label {
+      color: var(--color-dark-text);
+    }
+    .page-dark input,
+    .page-dark select {
+      background: rgba(0, 0, 0, 0.3);
+      border-color: var(--color-dark-border);
+      color: var(--color-dark-text);
+    }
+    .page-dark input::placeholder {
+      color: var(--color-dark-muted);
+    }
+    .page-dark button {
+      background: var(--color-accent);
+      color: var(--color-dark-bg);
+    }
+    .page-dark button:hover {
+      background: #67e8f9;
+    }
+    .page-dark .trades {
+      background: var(--color-dark-surface);
+      border-color: var(--color-dark-border);
+      box-shadow: none;
+    }
+    .page-dark .trades h3 {
+      color: var(--color-dark-text);
+    }
+    .page-dark .trade-row {
+      border-bottom-color: var(--color-dark-border);
+      color: var(--color-dark-text);
+    }
+    .page-dark .trade-row-header {
+      background: rgba(0, 0, 0, 0.3) !important;
+      color: var(--color-dark-muted);
+    }
+    .page-dark .trade-row:nth-child(even):not(.trade-row-header) {
+      background: rgba(0, 0, 0, 0.15);
+    }
+    .page-dark .trade-reason-text {
+      color: var(--color-dark-text);
+    }
+    .page-dark .trade-reason-meta,
+    .page-dark .trade-reason-none {
+      color: var(--color-dark-muted);
+    }
+    .page-dark .live-activity-ticker {
+      background: rgba(34, 211, 238, 0.1);
+      border-color: rgba(34, 211, 238, 0.25);
+    }
+    .page-dark .live-ticker-label {
+      color: var(--color-accent);
+    }
+    .page-dark .live-ticker-items {
+      color: var(--color-dark-text);
+    }
+    .page-dark .error {
+      background: rgba(248, 113, 113, 0.1);
+      border-color: rgba(248, 113, 113, 0.3);
+      color: #fca5a5;
+    }
+    .page-dark .picker-top {
+      margin-bottom: var(--space-32);
+    }
+    .page-dark .picker-site-title {
+      font-family: var(--font-display);
+      color: var(--color-dark-text);
+    }
+    .page-dark .picker-top-links {
+      color: var(--color-dark-muted);
+    }
+    .page-dark .nav-docs-link,
+    .page-dark .switch-mode-link {
+      color: var(--color-accent);
+    }
+    .page-dark .switch-mode-link:hover {
+      color: var(--color-accent);
+      text-decoration: underline;
+    }
+    .page-dark .picker-sep {
+      color: var(--color-dark-border);
+    }
+    .page-dark .picker-header p {
+      color: var(--color-dark-muted);
+    }
+    .page-dark .picker-panel-category,
+    .page-dark .picker-panel {
+      background: var(--color-dark-surface);
+      border-color: var(--color-dark-border);
+      box-shadow: none;
+    }
+    .page-dark .picker-type-tab {
+      background: rgba(0, 0, 0, 0.3);
+      border-color: var(--color-dark-border);
+      color: var(--color-dark-text);
+    }
+    .page-dark .picker-type-tab:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--color-dark-muted);
+    }
+    .page-dark .picker-type-tab.active {
+      background: var(--color-accent);
+      color: var(--color-dark-bg);
+      border-color: var(--color-accent);
+    }
+    .page-dark .picker-category-tab.tab-energy {
+      background: rgba(217, 119, 6, 0.2);
+      color: #fbbf24;
+    }
+    .page-dark .picker-category-tab.tab-energy.active {
+      background: #d97706;
+      color: white;
+    }
+    .page-dark .picker-category-tab.tab-weather {
+      background: rgba(2, 132, 199, 0.2);
+      color: #38bdf8;
+    }
+    .page-dark .picker-category-tab.tab-weather.active {
+      background: #0284c7;
+      color: white;
+    }
+    .page-dark .station-box {
+      background: var(--color-dark-surface);
+      border-color: var(--color-dark-border);
+    }
+    .page-dark .station-box:hover {
+      box-shadow: 0 0 16px var(--color-accent-dim);
+      border-color: var(--color-accent);
+    }
+    .page-dark .station-box h4 {
+      color: var(--color-dark-text);
+      border-bottom-color: var(--color-dark-border);
+    }
+    .page-dark .station-links a {
+      background: rgba(0, 0, 0, 0.3);
+      border-color: var(--color-dark-border);
+      color: var(--color-accent);
+    }
+    .page-dark .station-links a:hover {
+      background: var(--color-accent-dim);
+      border-color: var(--color-accent);
+    }
+    .page-dark .observer-trade-cta {
+      border-top-color: var(--color-dark-border);
+    }
+    .page-dark .observer-trade-cta a {
+      color: var(--color-accent);
+    }
+    .page-dark .loading-state {
+      color: var(--color-dark-muted);
+      text-align: center;
+      padding: var(--space-32);
+    }
+    .page-dark .agent-view-desc {
+      color: var(--color-dark-muted);
+    }
+    .page-dark .agent-view a {
+      color: var(--color-accent);
+    }
+    .page-dark .place-order a {
+      color: var(--color-accent);
     }
   </style>
 </head>
