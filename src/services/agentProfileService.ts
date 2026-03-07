@@ -92,6 +92,7 @@ export function formatAgentSelfProfile(
   metrics: {
     pnl24h: number;
     nextRefillEta: string | null;
+    opsContact?: string | null;
   }
 ): AgentSelfProfilePayload {
   const balance = Number(profile.account.balance.toString());
@@ -112,7 +113,7 @@ export function formatAgentSelfProfile(
     drawdown,
     deploymentCap: getDeploymentCapDescription(profile.trustTier),
     nextRefillEta: metrics.nextRefillEta,
-    opsContact: null,
+    opsContact: metrics.opsContact ?? null,
   };
 }
 

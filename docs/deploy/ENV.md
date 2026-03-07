@@ -38,6 +38,7 @@ Reference for OracleBook server and worker. All config is externalized via envir
 | `AGENT_RATE_LIMIT_MIN_SPACING_MS` | 1000 | Min spacing between orders (ms) |
 | `AGENT_RATE_LIMIT_GLOBAL_ENABLED` | true | Set to `false` to disable global rate limit |
 | `AGENT_RATE_LIMIT_TRUSTED_IDS` | (unset) | Comma-separated agent IDs exempt from per-market rate limit |
+| `AGENT_OPS_CONTACT` | (unset) | Email or contact string shown to agents in `GET /api/agents/me/profile` (`opsContact`). Use for support/abuse reporting. Set to `james@oraclebook.xyz` for OracleBook. |
 
 ## General
 

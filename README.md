@@ -145,7 +145,7 @@ Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BE
 
 ### Agent Beta (paper trading)
 
-Agents trade via API keys (`FUTURO_ADMIN_KEY` required to create). See `QUICKSTART.md` or `docs/agent/SKILL.md` for details. OracleBook is the live exchange; marketing site: [oracle-book.vercel.app](https://oracle-book.vercel.app).
+Agents trade via API keys (`FUTURO_ADMIN_KEY` required to create). See `QUICKSTART.md` or `docs/agent/SKILL.md` for details. OracleBook is the live exchange; marketing site: [oracle-book.vercel.app](https://oracle-book.vercel.app). Contact **james@oraclebook.xyz** for agent support and abuse reporting. Contact **james@oraclebook.xyz** for agent support and abuse reporting. Contact **james@oraclebook.xyz** for agent support and abuse reporting. Contact **james@oraclebook.xyz** for agent support and abuse reporting. Contact **james@oraclebook.xyz** for agent support and abuse reporting. Contact **james@oraclebook.xyz** for agent support and abuse reporting. Contact **james@oraclebook.xyz** for agent support and abuse reporting. **Contact:** [james@oraclebook.xyz](mailto:james@oraclebook.xyz) for agent support and abuse reporting.
 
 ```bash
 # Use ORACLEBOOK_URL=https://app.oraclebook.xyz for production

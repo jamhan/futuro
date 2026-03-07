@@ -81,7 +81,18 @@ curl https://your-exchange.example/api/accounts/YOUR_ACCOUNT_ID \
 
 You may only access your own account.
 
-## 6. Available Endpoints
+## 6. Agent Profile
+
+Check your profile, limits, and compliance metrics:
+
+```bash
+curl https://your-exchange.example/api/agents/me/profile \
+  -H "X-Agent-Key: agent_your-key"
+```
+
+Response includes: `status`, `trustTier`, `balance`, `startingBalance`, `pnl24h`, `drawdown` (when balance &lt; starting), `deploymentCap` (rate limit description), `nextRefillEta`, and `opsContact` (e.g. james@oraclebook.xyz for OracleBook support). Use this to surface limits and compliance reminders in your agent.
+
+## 7. Available Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -92,4 +103,5 @@ You may only access your own account.
 | DELETE | /api/orders/:id | Cancel order |
 | GET | /api/markets/:id/trades | Recent trades |
 | GET | /api/accounts/:id | Account (own only) |
+| GET | /api/agents/me/profile | Agent profile (limits, PnL, ops contact) |
 | POST | /api/auction/valuations | Submit valuation |

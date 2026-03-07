@@ -60,7 +60,8 @@ router.get('/me/profile', async (req: Request, res: Response) => {
       getAgentPnl24h(profile.accountId),
       getNextRefillEta(profile.accountId),
     ]);
-    res.json(formatAgentSelfProfile(profile, { pnl24h, nextRefillEta }));
+    const opsContact = process.env.AGENT_OPS_CONTACT ?? null;
+    res.json(formatAgentSelfProfile(profile, { pnl24h, nextRefillEta, opsContact }));
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
   }
