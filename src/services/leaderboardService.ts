@@ -1,7 +1,13 @@
 import Decimal from 'decimal.js';
 import { getPrismaClient } from '../db/client';
+import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 
 const prisma = getPrismaClient();
+
+const UNVERIFIED_ORDER_INTERVAL_SEC = parseInt(
+  process.env.AGENT_UNVERIFIED_ORDER_INTERVAL_SEC ?? '300',
+  10
+);
 
 export interface LeaderboardEntry {
   agentId: string;
@@ -86,4 +92,72 @@ export async function getAgentTelemetry(agentId: string): Promise<{
     pnl: balance - starting,
     valuationCount,
   };
+}
+
+/**
+ * Human-readable deployment cap from trust tier (matches agentPerMarketRateLimit).
+ */
+export function getDeploymentCapDescription(trustTier: string): string {
+  if (trustTier === 'UNVERIFIED') {
+    return `1 order per ${UNVERIFIED_ORDER_INTERVAL_SEC}s (unverified agent)`;
+  }
+  return '1 order/sec per market';
+}
+
+/**
+ * Sum trade cashflow (seller credits minus buyer debits) for trades in last 24h.
+ */
+export async function getAgentPnl24h(accountId: string): Promise<number> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const trades = await prisma.trade.findMany({
+    where: {
+      OR: [{ buyerAccountId: accountId }, { sellerAccountId: accountId }],
+      createdAt: { gte: since },
+    },
+  });
+  let pnl = 0;
+  for (const t of trades) {
+    const amount = Number(t.price.toString()) * Number(t.quantity.toString());
+    if (t.sellerAccountId === accountId) pnl += amount;
+    else pnl -= amount;
+  }
+  return pnl;
+}
+
+/**
+ * Sum of position notionals (exposure at risk).
+ * Futures: |quantity| * contractMultiplier * maxPrice (or 100).
+ * Binary: (yesShares + noShares) as proxy.
+ */
+export async function getAgentExposure(accountId: string): Promise<number> {
+  const positions = await prisma.position.findMany({
+    where: { accountId },
+    include: { market: true },
+  });
+  let total = 0;
+  for (const p of positions) {
+    const mult = Number((p.market.contractMultiplier ?? 1).toString());
+    const maxPrice = p.market.maxPrice != null ? Number(p.market.maxPrice.toString()) : 100;
+    if (isFuturesMarket(p.market)) {
+      const qty = p.quantity != null ? Math.abs(Number(p.quantity.toString())) : 0;
+      total += qty * mult * maxPrice;
+    } else {
+      const yes = Number(p.yesShares.toString());
+      const no = Number(p.noShares.toString());
+      total += (yes + no) * mult;
+    }
+  }
+  return total;
+}
+
+/**
+ * Last order createdAt for the account (proxy for last activity).
+ */
+export async function getAgentLastActivity(accountId: string): Promise<Date | null> {
+  const order = await prisma.order.findFirst({
+    where: { accountId },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  return order?.createdAt ?? null;
 }

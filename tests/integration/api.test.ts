@@ -881,4 +881,131 @@ describe('API', () => {
       await prisma.account.delete({ where: { id: agentRes.body.accountId } });
     });
   });
+
+  describe('GET /api/admin/agents', () => {
+    it('returns 401 without admin key', async () => {
+      const res = await request(app).get('/api/admin/agents');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns paginated list with admin key', async () => {
+      const res = await request(app)
+        .get('/api/admin/agents')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        items: expect.any(Array),
+        total: expect.any(Number),
+        page: expect.any(Number),
+        limit: expect.any(Number),
+      });
+    });
+
+    it('supports status and trustTier filters', async () => {
+      const res = await request(app)
+        .get('/api/admin/agents?status=ACTIVE&trustTier=TRUSTED')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items).toBeDefined();
+    });
+  });
+
+  describe('GET /api/admin/agents/:id', () => {
+    it('returns 404 for non-existent agent', async () => {
+      const res = await request(app)
+        .get('/api/admin/agents/non-existent-cuid')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`);
+      expect(res.status).toBe(404);
+    });
+
+    it('returns full profile with metrics for existing agent', async () => {
+      const createRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'admin-get-test-agent' });
+      const profile = await prisma.agentProfile.findFirst({
+        where: { accountId: createRes.body.accountId },
+        include: { account: true },
+      });
+
+      const res = await request(app)
+        .get(`/api/admin/agents/${profile!.id}`)
+        .set('Authorization', `Bearer ${ADMIN_KEY}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        id: profile!.id,
+        name: 'admin-get-test-agent',
+        accountId: createRes.body.accountId,
+        status: 'ACTIVE',
+        trustTier: expect.any(String),
+        startingBalance: expect.any(Number),
+        account: { balance: expect.any(Number), isPaper: true },
+        pnl24h: expect.any(Number),
+        exposure: expect.any(Number),
+        deploymentCap: expect.any(String),
+      });
+    });
+  });
+
+  describe('PATCH /api/admin/agents/:id', () => {
+    it('updates status, trustTier, startingBalance, notes', async () => {
+      const createRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'admin-patch-test-agent' });
+      const profile = await prisma.agentProfile.findFirst({
+        where: { accountId: createRes.body.accountId },
+      });
+
+      const res = await request(app)
+        .patch(`/api/admin/agents/${profile!.id}`)
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({
+          status: 'SUSPENDED',
+          trustTier: 'VERIFIED',
+          notes: 'Test note from integration',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('SUSPENDED');
+      expect(res.body.trustTier).toBe('VERIFIED');
+      expect(res.body.notes).toBe('Test note from integration');
+    });
+  });
+
+  describe('GET /api/agents/me/profile', () => {
+    it('returns 401 without API key', async () => {
+      const res = await request(app).get('/api/agents/me/profile');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns own profile with API key', async () => {
+      const createRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'me-profile-test-agent' });
+      const agentKey = createRes.body.apiKey;
+
+      const res = await request(app)
+        .get('/api/agents/me/profile')
+        .set('X-Agent-Key', agentKey);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        name: 'me-profile-test-agent',
+        accountId: createRes.body.accountId,
+        status: 'ACTIVE',
+        trustTier: expect.any(String),
+        balance: expect.any(Number),
+        pnl24h: expect.any(Number),
+        deploymentCap: expect.any(String),
+        opsContact: null,
+      });
+    });
+  });
 });

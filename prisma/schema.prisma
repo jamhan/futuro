@@ -70,6 +70,7 @@ model AgentProfile {
   startingBalance Decimal        @default(10000) @db.Decimal(20, 8)
   status          AgentStatus    @default(ACTIVE)
   trustTier       AgentTrustTier @default(UNVERIFIED)
+  notes           String?        // Admin notes; optional
   account         Account       @relation(fields: [accountId], references: [id])
   accountId       String        @unique
   createdAt       DateTime      @default(now())

@@ -8,6 +8,9 @@ import { getPrismaClient } from '../db/client';
 import { LedgerService } from '../services/ledgerService';
 import { ensureSystemAccount, SYSTEM_PAPER_ACCOUNT_ID } from '../services/systemAccount';
 import { getAgentTelemetry } from '../services/leaderboardService';
+import { getAgentPnl24h } from '../services/leaderboardService';
+import { getNextRefillEta } from '../services/paperTopup';
+import { formatAgentSelfProfile } from '../services/agentProfileService';
 
 const router = Router();
 const prisma = getPrismaClient();
@@ -40,6 +43,28 @@ function requireAdminKey(req: Request, res: Response, next: () => void): void {
   }
   next();
 }
+
+router.get('/me/profile', async (req: Request, res: Response) => {
+  try {
+    if (!req.agent) {
+      return res.status(401).json({ error: 'API key required', code: 'UNAUTHORIZED' });
+    }
+    const profile = await prisma.agentProfile.findUnique({
+      where: { id: req.agent.id },
+      include: { account: true },
+    });
+    if (!profile) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const [pnl24h, nextRefillEta] = await Promise.all([
+      getAgentPnl24h(profile.accountId),
+      getNextRefillEta(profile.accountId),
+    ]);
+    res.json(formatAgentSelfProfile(profile, { pnl24h, nextRefillEta }));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
 
 router.get('/:id/telemetry', async (req: Request, res: Response) => {
   try {
