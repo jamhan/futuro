@@ -63,7 +63,7 @@ fly deploy -a oraclebook --no-cache
    ```bash
    fly logs -a oraclebook-worker
    ```
-   Look for `[oracleIngestion]` messages and error counts.
+   Look for `[oracleFetch]` and `[oracleIngestion]` messages and error counts.
 
 2. **Check oracle observations**
    - Use Prisma Studio or direct SQL against production DB
@@ -74,8 +74,10 @@ fly deploy -a oraclebook --no-cache
    - Document the manual override for audit
 
 4. **Fix data pipeline**
-   - If `ORACLE_DATA_DIR` is misconfigured or external source is down, fix the data pipeline
-   - Re-run oracle ingestion after data is available
+   - If `ORACLE_DATA_DIR` is misconfigured or volume not mounted, verify `fly.worker.toml` has `[mounts]` and volume exists: `fly volumes list -a oraclebook-worker`
+   - Create volume if missing: `fly volumes create oracle_data --size 1 -a oraclebook-worker`
+   - If BOM or AEMO NEMWEB is down, the fetch cron will log errors; retry after source is available
+   - For manual recovery: run `npm run fetch:bom` / `npm run fetch:daily-rrp` locally with production `DATABASE_URL`, then trigger admin oracle import
 
 5. **Settle affected markets**
    - After resolution: `POST /api/admin/settlements/:marketId/run` (Bearer FUTURO_ADMIN_KEY) for each resolved market, or let the worker cron settle automatically when REDIS_URL is set

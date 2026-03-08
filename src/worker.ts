@@ -6,7 +6,7 @@
 
 import http from 'http';
 import { startAuctionCron } from './jobs/auctionCron';
-import { startOracleIngestionCron } from './jobs/oracleIngestionCron';
+import { startOracleFetchCron } from './jobs/oracleFetchCron';
 import { startSettlementCron } from './jobs/settlementCron';
 import { createSettlementWorker } from './queues/settlementQueue';
 import { getMetrics, getContentType } from './services/metrics';
@@ -49,7 +49,7 @@ const server = http.createServer(async (req, res) => {
 
 // Start cron jobs
 startAuctionCron();
-startOracleIngestionCron();
+startOracleFetchCron();
 
 // Start settlement worker and cron (requires Redis - set REDIS_URL)
 if (process.env.REDIS_URL) {

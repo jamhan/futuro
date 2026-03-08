@@ -2,6 +2,30 @@
 
 This directory stores oracle observation files ingested from BOM (Bureau of Meteorology) and AEMO (energy dispatch) sources. The oracle ingestor reads these files and writes values to `OracleObservation`, then triggers resolve for LOCKED prediction markets.
 
+**Production (Fly.io):** The worker's oracle pipeline cron fetches BOM/AEMO data and writes here automatically. A Fly volume is mounted at `/app/data/oracle`. Local dev still uses manual fetch scripts.
+
+**Production (Fly.io):** The worker populates this directory via the oracle fetch cron (`ORACLE_FETCH_CRON`), which fetches BOM/AEMO data for LOCKED markets and writes JSON to the mounted volume. **Local dev:** Use manual fetch scripts (`npm run fetch:bom`, `npm run fetch:daily-rrp`).
+
+**Production (Fly.io):** The worker populates this directory via the oracle fetch cron (`ORACLE_FETCH_CRON`), which fetches BOM/AEMO data for LOCKED markets and writes JSON to a Fly volume mounted at `/app/data/oracle`. Local dev still uses manual fetch scripts.
+
+**Production:** The worker's oracle pipeline cron fetches BOM/AEMO data and writes here automatically (Fly volume at `/app/data/oracle`). **Local dev:** Use manual fetch scripts (`npm run fetch:bom`, `npm run fetch:daily-rrp`).
+
+**Production (Fly.io):** The worker's oracle fetch cron populates this directory automatically. A Fly volume is mounted at `/app/data/oracle`; the cron fetches BOM weekly and AEMO daily data for LOCKED markets, writes JSON here, then ingests. **Local dev:** Use the manual fetch scripts below.
+
+**Production (Fly.io):** The worker populates this directory via the oracle fetch cron (daily 6am UTC). A Fly volume is mounted at `/app/data/oracle`. **Local dev:** Use manual fetch scripts (`npm run fetch:bom`, `npm run fetch:daily-rrp`).
+
+**Production (Fly.io):** The worker populates this directory via the oracle fetch cron (`ORACLE_FETCH_CRON`). A Fly volume is mounted at `/app/data/oracle`. The pipeline fetches BOM weekly + AEMO daily data for LOCKED markets, writes JSON here, then ingests.
+
+**Local dev:** Run `npm run fetch:bom` and `npm run fetch:daily-rrp` manually, or use the admin API to trigger import.
+
+**Production (Fly.io):** The worker runs an oracle pipeline cron (`ORACLE_FETCH_CRON`, default daily 6am UTC) that fetches BOM weekly and AEMO daily data for LOCKED markets, writes JSON to a mounted volume at `/app/data/oracle`, then ingests. No manual fetch needed.
+
+**Local dev:** Run fetch scripts manually (see below), then use admin API or wait for ingest.
+
+**Production (Fly.io):** The worker runs an oracle pipeline cron (daily 6am UTC) that fetches BOM/AEMO data for LOCKED markets, writes JSON to a mounted volume at `/app/data/oracle`, then ingests. Local dev still uses manual fetch scripts.
+
+**Production (Fly.io):** The worker runs an oracle pipeline cron (`ORACLE_FETCH_CRON`, default daily 6am UTC) that fetches BOM/AEMO data for LOCKED markets, writes JSON to a mounted volume at `/app/data/oracle`, then ingests. Local dev still uses manual fetch scripts.
+
 ## Week Definition (OracleBook Markets)
 
 **No ambiguity**: OracleBook climate markets use a **Mon–Sun calendar week**.

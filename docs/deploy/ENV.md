@@ -23,8 +23,8 @@ Reference for OracleBook server and worker. All config is externalized via envir
 | `WORKER_PORT` | 3001 | Health/metrics port for probes |
 | `REDIS_URL` | (unset) | Redis URL for settlement queue. If unset, automatic settlement is disabled; admin trigger uses sync fallback. |
 | `AUCTION_CRON` | `0 * * * *` | Cron schedule for auction runs |
-| `ORACLE_INGESTION_CRON` | `*/15 * * * *` | Cron schedule for oracle file ingestion |
-| `ORACLE_DATA_DIR` | (unset) | Directory path for oracle JSON files. If unset, oracle ingestion may skip or use default. |
+| `ORACLE_FETCH_CRON` | `0 6 * * *` | Cron schedule for oracle pipeline (fetch BOM/AEMO + ingest). Daily 6am UTC. |
+| `ORACLE_DATA_DIR` | `/app/data/oracle` (Fly) | Directory path for oracle JSON files. On Fly.io worker, use volume mount at `/app/data/oracle`. |
 
 ## Agent Beta
 

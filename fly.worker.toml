@@ -11,6 +11,11 @@ app = "oraclebook-worker"
 [env]
   NODE_ENV = "production"
   WORKER_PORT = "8081"
+  ORACLE_DATA_DIR = "/app/data/oracle"
+
+[mounts]
+  source = "oracle_data"
+  destination = "/app/data/oracle"
 
 [http_service]
   internal_port = 8081

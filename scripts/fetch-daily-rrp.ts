@@ -5,19 +5,14 @@
  * writes JSON to data/oracle/ for oracle ingestion.
  *
  * Usage:
- *   npx tsx scripts/fetch-daily-rrp.ts --zip-url <url> --date 2026-03-20
- *   npx tsx scripts/fetch-daily-rrp.ts --zip-url <url1> --zip-url <url2> --date 2026-03-20 --regions NSW1,QLD1,VIC1
+ *   npx tsx scripts/fetch-daily-rrp.ts --date 2026-03-20
+ *   npx tsx scripts/fetch-daily-rrp.ts --zip-url <url> --date 2026-03-20 --regions NSW1,QLD1,VIC1
  *
- * Zip URL(s): from https://www.nemweb.com.au/Reports/Current/Dispatch_Reports/
- * For a full day you may need multiple zips (each contains a time window) or an archive.
- * The script concatenates all CSVs from all zips and extracts daily average per region.
+ * If --zip-url is omitted, discovers archive URL (PUBLIC_DISPATCH_YYYYMMDD.zip).
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
-import AdmZip from 'adm-zip';
-import { parseDispatchCsv, extractDailyAverageRRP } from '../src/lib/oracle/dispatchParser';
-import { NEM_REGIONS } from '../src/config/oracle/aemoMarkets';
+import { fetchAemoDailyForRegionsAndDate } from '../src/lib/oracle/aemoFetcher';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'oracle');
 
@@ -41,90 +36,32 @@ function parseArgs(): {
     }
   }
 
-  const regionList = regions
-    ? regions.split(',').map((r) => r.trim())
-    : [...NEM_REGIONS];
+  const regionList = regions ? regions.split(',').map((r) => r.trim()) : [];
 
   return { zipUrls, date, regions: regionList };
-}
-
-async function fetchZip(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Fetch failed: ${res.status} ${res.statusText} for ${url}`);
-  }
-  return res.arrayBuffer();
-}
-
-function extractCsvFromZip(zip: AdmZip): string {
-  let csvContent = '';
-  const entries = zip.getEntries();
-  for (const entry of entries) {
-    if (!entry.isDirectory && (entry.entryName.endsWith('.CSV') || entry.entryName.endsWith('.csv'))) {
-      csvContent += entry.getData().toString('utf8');
-    }
-  }
-  return csvContent;
 }
 
 async function main() {
   const { zipUrls, date, regions } = parseArgs();
 
-  if (zipUrls.length === 0 || !date) {
+  if (!date) {
     console.error(
-      'Usage: npx tsx scripts/fetch-daily-rrp.ts --zip-url <url> [--zip-url <url2> ...] --date YYYY-MM-DD [--regions NSW1,QLD1,VIC1,SA1,TAS1]'
+      'Usage: npx tsx scripts/fetch-daily-rrp.ts --date YYYY-MM-DD [--zip-url <url> ...] [--regions NSW1,QLD1,VIC1,SA1,TAS1]'
     );
-    console.error('Zip URLs from: https://www.nemweb.com.au/Reports/Current/Dispatch_Reports/');
-    console.error('For a full day, you may need multiple zips covering all 288 five-minute intervals.');
+    console.error('If --zip-url omitted, uses AEMO archive (PUBLIC_DISPATCH_YYYYMMDD.zip).');
     process.exit(1);
   }
 
-  let allRows: ReturnType<typeof parseDispatchCsv> = [];
-  for (const url of zipUrls) {
-    const zipBuf = await fetchZip(url);
-    const zip = new AdmZip(Buffer.from(zipBuf));
-    const csv = extractCsvFromZip(zip);
-    if (csv) {
-      const rows = parseDispatchCsv(csv);
-      allRows = allRows.concat(rows);
-    }
-  }
+  const result = await fetchAemoDailyForRegionsAndDate(regions, date, zipUrls, DATA_DIR);
 
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-
-  const dateNorm = date.slice(0, 10);
-  let written = 0;
-
-  for (const region of regions) {
-    const avg = extractDailyAverageRRP(allRows, region, dateNorm);
-    if (avg == null) {
-      console.warn(`No data for region=${region} date=${dateNorm}`);
-      continue;
-    }
-
-    const indexId = `${region}_daily_rrp_${dateNorm}`;
-    const outPath = path.join(DATA_DIR, `${indexId}.json`);
-    const out = {
-      indexId,
-      marketId: indexId,
-      value: Math.round(avg * 100) / 100,
-      region,
-      date: dateNorm,
-      source: 'aemo',
-      collected_at: new Date().toISOString(),
-    };
-    fs.writeFileSync(outPath, JSON.stringify(out, null, 2));
-    console.log(`Wrote ${outPath} (avg RRP = ${out.value} $/MWh)`);
-    written++;
-  }
-
-  if (written === 0) {
+  if (result.written === 0) {
     console.error('No data extracted. Ensure the zip(s) contain PUBLIC_DISPATCH rows for the given date.');
+    result.errors.forEach((e) => console.error(e));
     process.exit(1);
   }
 
+  console.log(`Wrote ${result.written} files to ${DATA_DIR}`);
+  if (result.errors.length > 0) result.errors.forEach((e) => console.warn(e));
   console.log(`\nRun oracle import: curl -X POST .../api/admin/oracle/import -H "Authorization: Bearer $FUTURO_ADMIN_KEY"`);
 }
 
