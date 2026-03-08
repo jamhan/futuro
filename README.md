@@ -130,6 +130,25 @@ Codes: `VALIDATION_FAILED`, `MARKET_NOT_FOUND`, `TRADING_NOT_ALLOWED`, `PRICE_BE
 - `POST /api/markets/:id/lock` – Lock (stop trading)
 - `POST /api/markets/:id/resolve` – Resolve via oracle
 - `POST /api/admin/settlements/:marketId/run` – Settle positions (admin; requires `FUTURO_ADMIN_KEY`)
+- `GET /api/admin/exposure` – Agent exposure snapshot (balance, open orders, positions). Admin only. Query: `?agentId=`, `?marketId=`.
+
+Sample response:
+
+```json
+{
+  "generatedAt": "2026-03-10T12:00:00.000Z",
+  "agents": [
+    {
+      "agentId": "clxxx",
+      "name": "my-agent",
+      "accountId": "uuid",
+      "balance": "10000.00000000",
+      "openOrders": [{ "marketId": "...", "side": "BUY", "quantity": "5", "price": "24" }],
+      "positions": [{ "marketId": "...", "description": "...", "netContracts": "3.5", "notional": "84", "lastUpdated": "..." }]
+    }
+  ]
+}
+```
 
 ### Orders
 

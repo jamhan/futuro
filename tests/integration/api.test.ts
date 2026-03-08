@@ -286,6 +286,165 @@ describe('API', () => {
     });
   });
 
+  describe('GET /api/admin/exposure', () => {
+    it('returns 401 without admin key', async () => {
+      const res = await request(app).get('/api/admin/exposure');
+      expect(res.status).toBe(401);
+      expect(res.body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('returns exposure snapshot with agents', async () => {
+      const agent1Res = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'exposure-agent-1' });
+      const agent2Res = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'exposure-agent-2' });
+      await promoteAgentToTrusted(agent1Res.body.accountId);
+      await promoteAgentToTrusted(agent2Res.body.accountId);
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Exposure test market',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'FUTURES',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agent1Res.body.apiKey)
+        .send({
+          marketId,
+          side: 'BUY',
+          type: 'LIMIT',
+          price: 20,
+          quantity: 4,
+          reasonForTrade: {
+            reason: 'Exposure test',
+            theoreticalPriceMethod: 'Test',
+            confidenceInterval: [20, 28],
+          },
+        });
+
+      await prisma.position.upsert({
+        where: {
+          accountId_marketId: {
+            accountId: agent1Res.body.accountId,
+            marketId,
+          },
+        },
+        create: {
+          accountId: agent1Res.body.accountId,
+          marketId,
+          yesShares: 0,
+          noShares: 0,
+          quantity: 3.5,
+        },
+        update: { quantity: 3.5 },
+      });
+
+      await new Promise((r) => setTimeout(r, 1100));
+
+      const res = await request(app)
+        .get('/api/admin/exposure')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        generatedAt: expect.any(String),
+        agents: expect.any(Array),
+      });
+      expect(res.body.agents.length).toBeGreaterThanOrEqual(2);
+      const agent1 = res.body.agents.find((a: { agentId: string }) => a.agentId === agent1Res.body.id);
+      expect(agent1).toBeDefined();
+      expect(agent1).toMatchObject({
+        agentId: agent1Res.body.id,
+        name: 'exposure-agent-1',
+        accountId: agent1Res.body.accountId,
+      });
+      expect(agent1.balance).toBeDefined();
+      expect(Array.isArray(agent1.openOrders)).toBe(true);
+      expect(Array.isArray(agent1.positions)).toBe(true);
+      expect(agent1.openOrders.some((o: { marketId: string }) => o.marketId === marketId)).toBe(true);
+      const pos = agent1.positions.find((p: { marketId: string }) => p.marketId === marketId);
+      expect(pos).toBeDefined();
+      expect(pos.netContracts).toBe('3.5');
+    });
+
+    it('filters by agentId', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'exposure-filter-agent' });
+      await promoteAgentToTrusted(agentRes.body.accountId);
+
+      const res = await request(app)
+        .get(`/api/admin/exposure?agentId=${agentRes.body.id}`)
+        .set('Authorization', `Bearer ${ADMIN_KEY}`);
+      expect(res.status).toBe(200);
+      expect(res.body.agents.length).toBe(1);
+      expect(res.body.agents[0].agentId).toBe(agentRes.body.id);
+    });
+
+    it('filters by marketId', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'exposure-market-filter-agent' });
+      await promoteAgentToTrusted(agentRes.body.accountId);
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Market filter test',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentRes.body.apiKey)
+        .send({
+          marketId,
+          side: 'BUY_YES',
+          type: 'LIMIT',
+          price: 0.5,
+          quantity: 3,
+          reasonForTrade: REASON_FOR_TRADE,
+        });
+
+      await new Promise((r) => setTimeout(r, 1100));
+
+      const res = await request(app)
+        .get(`/api/admin/exposure?marketId=${marketId}`)
+        .set('Authorization', `Bearer ${ADMIN_KEY}`);
+      expect(res.status).toBe(200);
+      const agentWithOrder = res.body.agents.find(
+        (a: { openOrders: { marketId: string }[] }) =>
+          a.openOrders?.some((o: { marketId: string }) => o.marketId === marketId)
+      );
+      expect(agentWithOrder).toBeDefined();
+    });
+  });
+
   describe('Agent auth: GET /api/accounts/:id', () => {
     it('returns 403 when X-Agent-Key targets different account', async () => {
       const createRes = await request(app)

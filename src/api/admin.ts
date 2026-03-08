@@ -37,6 +37,30 @@ const patchAgentSchema = z.object({
 });
 
 import { requireAdminKey } from '../middleware/requireAdminKey';
+import { getExposureSnapshot } from '../services/exposureService';
+
+const exposureQuerySchema = z.object({
+  agentId: z.string().optional(),
+  marketId: z.string().optional(),
+});
+
+router.get('/exposure', requireAdminKey, async (req, res) => {
+  try {
+    const query = exposureQuerySchema.safeParse(req.query);
+    if (!query.success) {
+      return res.status(400).json({ error: query.error.errors });
+    }
+    const snapshot = await getExposureSnapshot({
+      agentId: query.data.agentId,
+      marketId: query.data.marketId,
+    });
+    res.json(snapshot);
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to fetch exposure',
+    });
+  }
+});
 
 router.post('/oracle/import', requireAdminKey, async (req, res) => {
   try {
