@@ -41,6 +41,7 @@ async function main() {
 
   // 3. Place a limit order (no accountId - uses agent's account from X-Agent-Key)
   // reasonForTrade is required for agent orders - appears in recent trades
+  // confidenceInterval: BINARY = 90% CI on probability (0-1); FUTURES = index units (e.g. mm)
   const orderRes = await fetch(`${BASE_URL}/api/orders`, {
     method: 'POST',
     headers,
@@ -53,7 +54,7 @@ async function main() {
       reasonForTrade: {
         reason: 'Example agent placing exploratory order',
         theoreticalPriceMethod: 'Order book mid / heuristic',
-        confidenceInterval: [0.4, 0.6],
+        confidenceInterval: isFutures ? [8, 12] : [0.4, 0.6],
       },
     }),
   });

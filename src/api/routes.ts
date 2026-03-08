@@ -285,14 +285,14 @@ router.post('/orders', agentPerMarketRateLimitMiddleware, agentRateLimitMiddlewa
       return res.status(400).json({
         error: 'reasonForTrade required for agent orders',
         code: 'REASON_FOR_TRADE_REQUIRED',
-        hint: 'Include reasonForTrade: { reason, theoreticalPriceMethod, confidenceInterval: [low, high] } to document your reasoning',
+        hint: 'Include reasonForTrade: { reason, theoreticalPriceMethod, confidenceInterval }. BINARY: [lower, upper] in 0-1; FUTURES: index units (e.g. [8, 12] for mm)',
       });
     }
     if (req.agent && data.reasonForTrade && !data.reasonForTrade.confidenceInterval) {
       return res.status(400).json({
         error: 'confidenceInterval required for agent orders',
         code: 'REASON_FOR_TRADE_REQUIRED',
-        hint: 'Include confidenceInterval: [lower, upper] — 90% bounds on predicted index value in market units (e.g. [8, 12] for mm rainfall)',
+        hint: 'Include confidenceInterval: [lower, upper]. BINARY: 0-1 (probability); FUTURES: index units (e.g. [8, 12] for mm rainfall)',
       });
     }
     const result = await exchangeService.placeOrder({

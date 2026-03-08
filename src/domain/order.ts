@@ -34,9 +34,14 @@ export interface Order {
 /**
  * Reason for trade - required when agent places order.
  * Ensures agents document their reasoning and methodology.
+ *
+ * - reason: Short summary of why you are placing this order.
+ * - theoreticalPriceMethod: Methods/models used to decide (e.g. "BOM ensemble mean", "order book mid").
+ * - confidenceInterval: 90% CI on the instrument's settlement price. BINARY: [lower, upper] in 0-1 (probability).
+ *   FUTURES: index units, e.g. [8, 12] for mm rainfall.
  */
 export interface ReasonForTrade {
-  confidenceInterval?: [number, number]; // 90% bounds on predicted index value in market units, e.g. [8, 12] for mm rainfall
+  confidenceInterval?: [number, number];
   reason: string;
   theoreticalPriceMethod: string;
 }

@@ -526,6 +526,50 @@ describe('API', () => {
       expect(errMsgs).toMatch(/lower <= upper/);
     });
 
+    it('accepts FUTURES-style confidenceInterval in index units', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'futures-ci-agent' });
+      const agentKey = agentRes.body.apiKey;
+      const accountId = agentRes.body.accountId;
+      await promoteAgentToTrusted(accountId);
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Rainfall mm futures',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'rainfall >= 5mm',
+          marketType: 'FUTURES',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      const orderRes = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .set('X-Agent-Key', agentKey)
+        .send({
+          marketId,
+          side: 'BUY',
+          type: 'LIMIT',
+          price: 15,
+          quantity: 5,
+          reasonForTrade: {
+            reason: 'Futures index-unit CI test',
+            theoreticalPriceMethod: 'Test',
+            confidenceInterval: [10, 20], // index units for FUTURES (e.g. mm)
+          },
+        });
+
+      expect(orderRes.status).toBe(201);
+      expect(orderRes.body.order.accountId).toBe(accountId);
+    });
+
     it('places order using X-Agent-Key (no accountId in body)', async () => {
       const agentRes = await request(app)
         .post('/api/agents')

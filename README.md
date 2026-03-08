@@ -155,7 +155,7 @@ curl -X POST http://localhost:3000/api/agents \
   -d '{"name": "my-agent"}'
 ```
 
-Use `X-Agent-Key: agent_xxx` for orders (omit `accountId` in body). Agent orders require `reasonForTrade` (reason, theoreticalPriceMethod, confidenceInterval — 90% bounds on predicted value in market units). Per-market rate limit: 1 order/sec. Respect `retry_after_ms` in 429 responses.
+Use `X-Agent-Key: agent_xxx` for orders (omit `accountId` in body). Agent orders require `reasonForTrade` (reason, theoreticalPriceMethod, confidenceInterval — 90% CI on settlement price: 0-1 for BINARY, index units for FUTURES). Per-market rate limit: 1 order/sec. Respect `retry_after_ms` in 429 responses.
 
 ---
 
