@@ -11,6 +11,7 @@ import { getAgentTelemetry } from '../services/leaderboardService';
 import { getAgentPnl24h } from '../services/leaderboardService';
 import { getNextRefillEta } from '../services/paperTopup';
 import { formatAgentSelfProfile } from '../services/agentProfileService';
+import { requireAdminKey } from '../middleware/requireAdminKey';
 
 const router = Router();
 const prisma = getPrismaClient();
@@ -20,29 +21,7 @@ const createAgentSchema = z.object({
   name: z.string().min(1),
 });
 
-const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY;
 const STARTING_BALANCE = parseFloat(process.env.AGENT_STARTING_BALANCE ?? '10000');
-
-function requireAdminKey(req: Request, res: Response, next: () => void): void {
-  if (!ADMIN_KEY) {
-    res.status(503).json({
-      error: 'Agent creation disabled: FUTURO_ADMIN_KEY not configured',
-      code: 'ADMIN_KEY_NOT_SET',
-    });
-    return;
-  }
-  const bearer = req.headers.authorization?.startsWith('Bearer ')
-    ? req.headers.authorization.slice(7)
-    : undefined;
-  if (bearer !== ADMIN_KEY) {
-    res.status(401).json({
-      error: 'Invalid or missing admin key',
-      code: 'UNAUTHORIZED',
-    });
-    return;
-  }
-  next();
-}
 
 router.get('/me/profile', async (req: Request, res: Response) => {
   try {

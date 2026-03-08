@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { OracleIngestor } from '../services/oracleIngestor';
@@ -35,28 +35,8 @@ const patchAgentSchema = z.object({
   startingBalance: z.number().positive().optional(),
   notes: z.string().nullable().optional(),
 });
-const ADMIN_KEY = process.env.FUTURO_ADMIN_KEY;
 
-function requireAdminKey(req: Request, res: Response, next: () => void): void {
-  if (!ADMIN_KEY) {
-    res.status(503).json({
-      error: 'Admin operations disabled: FUTURO_ADMIN_KEY not configured',
-      code: 'ADMIN_KEY_NOT_SET',
-    });
-    return;
-  }
-  const bearer = req.headers.authorization?.startsWith('Bearer ')
-    ? req.headers.authorization.slice(7)
-    : undefined;
-  if (bearer !== ADMIN_KEY) {
-    res.status(401).json({
-      error: 'Invalid or missing admin key',
-      code: 'UNAUTHORIZED',
-    });
-    return;
-  }
-  next();
-}
+import { requireAdminKey } from '../middleware/requireAdminKey';
 
 router.post('/oracle/import', requireAdminKey, async (req, res) => {
   try {

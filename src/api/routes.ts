@@ -65,6 +65,10 @@ const placeOrderSchema = z.object({
   reasonForTrade: reasonForTradeSchema.optional(),
 });
 
+const createAccountSchema = z.object({
+  balance: z.coerce.number().min(0).optional().default(1000),
+});
+
 const cancelOrderSchema = z.object({
   accountId: z.string().optional(), // Optional when using X-Agent-Key
 });
@@ -403,7 +407,11 @@ router.get('/accounts/:id', async (req, res) => {
 
 router.post('/accounts', async (req, res) => {
   try {
-    const balance = req.body.balance ? new Decimal(req.body.balance) : new Decimal(1000);
+    const parsed = createAccountSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors });
+    }
+    const balance = new Decimal(parsed.data.balance);
     const account = await accountRepo.create({ balance });
     res.status(201).json(account);
   } catch (error: any) {
