@@ -77,8 +77,14 @@ npm run dev
 curl -X POST http://localhost:3000/api/agents \
   -H "Content-Type: application/json" -H "Authorization: Bearer $FUTURO_ADMIN_KEY" \
   -d '{"name": "my-bot"}'
+# Response: { id, apiKey, accountId, name }
 
-# 3. Use the returned apiKey with X-Agent-Key header for orders (omit accountId)
+# 3. Promote to TRUSTED (new agents are UNVERIFIED and cannot trade). Replace ACCOUNT_ID with accountId from step 2.
+curl -X PATCH "http://localhost:3000/api/admin/agents/by-account/ACCOUNT_ID/trust" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $FUTURO_ADMIN_KEY" \
+  -d '{"trustTier": "TRUSTED"}'
+
+# 4. Use the apiKey with X-Agent-Key header for orders (omit accountId)
 AGENT_KEY=agent_xxx npm run agent-bot
 
 # Optional: smoke test (server must be running)

@@ -16,12 +16,8 @@ const REASON_FOR_TRADE = {
 };
 
 async function promoteAgentToTrusted(accountId: string): Promise<void> {
-  const profile = await prisma.agentProfile.findFirst({
-    where: { accountId },
-  });
-  if (!profile) throw new Error(`No profile for account ${accountId}`);
   const res = await request(app)
-    .patch(`/api/admin/agents/${profile.id}/trust`)
+    .patch(`/api/admin/agents/by-account/${accountId}/trust`)
     .set('Content-Type', 'application/json')
     .set('Authorization', `Bearer ${ADMIN_KEY}`)
     .send({ trustTier: 'TRUSTED' });
@@ -135,7 +131,7 @@ describe('API', () => {
       expect(res.body.code).toBe('UNAUTHORIZED');
     });
 
-    it('returns 201 with valid admin key and returns apiKey, accountId, name', async () => {
+    it('returns 201 with valid admin key and returns id, apiKey, accountId, name', async () => {
       const res = await request(app)
         .post('/api/agents')
         .set('Content-Type', 'application/json')
@@ -143,6 +139,7 @@ describe('API', () => {
         .send({ name: 'phase2-agent' });
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({
+        id: expect.any(String),
         accountId: expect.any(String),
         name: 'phase2-agent',
       });
@@ -156,6 +153,39 @@ describe('API', () => {
         .set('Authorization', `Bearer ${ADMIN_KEY}`)
         .send({ name: '' });
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('PATCH /api/admin/agents/by-account/:accountId/trust', () => {
+    it('promotes agent to TRUSTED by accountId', async () => {
+      const agentRes = await request(app)
+        .post('/api/agents')
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ name: 'by-account-promote-agent' });
+      const accountId = agentRes.body.accountId;
+
+      const res = await request(app)
+        .patch(`/api/admin/agents/by-account/${accountId}/trust`)
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ trustTier: 'TRUSTED' });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        accountId,
+        name: 'by-account-promote-agent',
+        trustTier: 'TRUSTED',
+      });
+      expect(res.body.id).toBeDefined();
+    });
+
+    it('returns 404 for unknown accountId', async () => {
+      const res = await request(app)
+        .patch(`/api/admin/agents/by-account/00000000-0000-0000-0000-000000000000/trust`)
+        .set('Content-Type', 'application/json')
+        .set('Authorization', `Bearer ${ADMIN_KEY}`)
+        .send({ trustTier: 'TRUSTED' });
+      expect(res.status).toBe(404);
     });
   });
 

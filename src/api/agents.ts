@@ -132,6 +132,7 @@ router.post('/', requireAdminKey, async (req: Request, res: Response) => {
     });
 
     res.status(201).json({
+      id: result.profile.id,
       apiKey,
       accountId: result.account.id,
       name: result.profile.name,

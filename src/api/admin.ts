@@ -236,6 +236,36 @@ router.patch('/agents/:id', requireAdminKey, async (req, res) => {
   }
 });
 
+// Promote by accountId (returned from POST /api/agents). Must be defined before /agents/:id/trust.
+router.patch('/agents/by-account/:accountId/trust', requireAdminKey, async (req, res) => {
+  try {
+    const body = patchTrustSchema.safeParse(req.body);
+    if (!body.success) {
+      return res.status(400).json({ error: body.error.errors });
+    }
+    const profile = await prisma.agentProfile.findUnique({
+      where: { accountId: req.params.accountId },
+    });
+    if (!profile) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const updated = await prisma.agentProfile.update({
+      where: { id: profile.id },
+      data: { trustTier: body.data.trustTier },
+    });
+    res.json({
+      id: updated.id,
+      name: updated.name,
+      trustTier: updated.trustTier,
+      accountId: updated.accountId,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to update trust tier',
+    });
+  }
+});
+
 router.patch('/agents/:id/trust', requireAdminKey, async (req, res) => {
   try {
     const body = patchTrustSchema.safeParse(req.body);

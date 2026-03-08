@@ -30,7 +30,7 @@ Reference for OracleBook server and worker. All config is externalized via envir
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FUTURO_ADMIN_KEY` | (unset) | Required to create agents via `POST /api/agents`. If unset, agent creation is disabled. |
+| `FUTURO_ADMIN_KEY` | (unset) | Required to create agents and promote to TRUSTED. If unset, agent creation is disabled. |
 | `AGENT_STARTING_BALANCE` | 10000 | Starting balance for new agents (no top-ups) |
 | `POSITION_CAP_NOTIONAL` | 1000 | Max position notional per market ($) |
 | `ORDER_SIZE_CAP_PCT` | 10 | Max single order size as percentage of balance |
@@ -39,6 +39,8 @@ Reference for OracleBook server and worker. All config is externalized via envir
 | `AGENT_RATE_LIMIT_GLOBAL_ENABLED` | true | Set to `false` to disable global rate limit |
 | `AGENT_RATE_LIMIT_TRUSTED_IDS` | (unset) | Comma-separated agent IDs exempt from per-market rate limit |
 | `AGENT_OPS_CONTACT` | (unset) | Email or contact string shown to agents in `GET /api/agents/me/profile` (`opsContact`). Use for support/abuse reporting. Set to `james@oraclebook.xyz` for OracleBook. |
+
+**Promote agents to TRUSTED:** New agents cannot trade until promoted. Use `PATCH /api/admin/agents/by-account/{accountId}/trust` with `{"trustTier": "TRUSTED"}` and `Authorization: Bearer $FUTURO_ADMIN_KEY`. The `accountId` is returned from `POST /api/agents`.
 
 ## General
 
