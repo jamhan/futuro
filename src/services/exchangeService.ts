@@ -5,7 +5,7 @@ import { MarketRepository } from '../repositories/marketRepository';
 import { OrderRepository } from '../repositories/orderRepository';
 import { TradeRepository } from '../repositories/tradeRepository';
 import { AccountRepository } from '../repositories/accountRepository';
-import { MatchingEngine } from '../engine/matching';
+import { MatchingEngine, OrderBook } from '../engine/matching';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 import { matchOrderWithOss } from '../engine/ossMatchingAdapter';
 import { validateOrder } from '../engine/riskEngine';
@@ -71,35 +71,39 @@ export class ExchangeService {
       );
     }
 
-    // Create order
+    // Create order (in-memory only; persisted in transaction)
     const order = createOrder(input);
-
     const isFutures = isFuturesMarket(market);
 
     const orderBookManager = getOrderBookManager();
-    const matchStart = process.hrtime.bigint();
-    let result;
-    if (isFutures) {
-      const restingOrders = await orderBookManager.getRestingOrdersForFutures(input.marketId);
-      result = matchOrderWithOss(order, restingOrders, input.marketId);
-    } else {
-      const orderBook = await orderBookManager.getBookForBinary(input.marketId);
-      result = MatchingEngine.matchOrder(order, orderBook, input.marketId);
-    }
-    const matchElapsedMs = Number(process.hrtime.bigint() - matchStart) / 1e6;
-    matchingLatencyMs.observe({ market_id: input.marketId }, matchElapsedMs);
 
-    console.log(`Matching result: ${result.trades.length} trades, ${result.updatedCounterpartyOrders.length} counterparty orders to update`);
-    if (result.trades.length > 0 && result.updatedCounterpartyOrders.length === 0) {
-      console.error('WARNING: Trades created but no counterparty orders to update!');
-      console.error('Trade details:', result.trades.map(t => ({ buyOrderId: t.buyOrderId, sellOrderId: t.sellOrderId })));
-    }
-    if (result.updatedCounterpartyOrders.length > 0) {
-      console.log('Counterparty orders to update:', result.updatedCounterpartyOrders.map(o => ({ id: o.id, side: o.side, status: o.status, filled: o.filledQuantity.toString() })));
-    }
-
-    // Persist everything in a single transaction so the remaining order is committed with counterparty updates.
+    // Single transaction: acquire per-market lock, load book, match, persist.
+    // pg_advisory_xact_lock serializes order placement per market and auto-releases on commit.
     return await this.prisma.$transaction(async (tx) => {
+      await (tx as any).$executeRawUnsafe(
+        `SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`,
+        `market:${input.marketId}`
+      );
+
+      const restingOrders = await OrderRepository.findRestingForMatching(tx, input.marketId);
+
+      const matchStart = process.hrtime.bigint();
+      let result;
+      if (isFutures) {
+        result = matchOrderWithOss(order, restingOrders, input.marketId);
+      } else {
+        const orderBook = new OrderBook();
+        for (const o of restingOrders) {
+          orderBook.addOrder(o);
+        }
+        result = MatchingEngine.matchOrder(order, orderBook, input.marketId);
+      }
+      const matchElapsedMs = Number(process.hrtime.bigint() - matchStart) / 1e6;
+      matchingLatencyMs.observe({ market_id: input.marketId }, matchElapsedMs);
+
+      if (result.trades.length > 0 && result.updatedCounterpartyOrders.length === 0) {
+        console.error('WARNING: Trades created but no counterparty orders to update!');
+      }
       const orderToSave = result.remainingOrder ?? (() => {
         const totalFilled = result.trades.reduce(
           (sum, t) =>
