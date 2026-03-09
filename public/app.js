@@ -40,6 +40,9 @@ let state = {
   userMode: localStorage.getItem('userMode') || null, // 'observer' | 'agent' | null
   previewMarkets: [], // { market, price } for landing
   leaderboard: [], // { agentName, pnl, ... } from GET /api/leaderboard
+  leaderboardLoading: true, // true until first leaderboard fetch completes
+  agentProfiles: [], // { name, trustTier, balance, pnl24h, ... } from GET /api/agents/profiles
+  agentProfilesLoading: true,
   liveActivity: [], // Recent trade events for ticker: { agentName, side, price, quantity, time }
 };
 
@@ -293,11 +296,14 @@ function clearUserMode() {
   state.market = null;
   state.markets = [];
   state.previewMarkets = [];
+  state.leaderboardLoading = true;
+  state.agentProfilesLoading = true;
   renderApp();
   loadMarketsForLanding();
 }
 
 async function loadLeaderboard() {
+  state.leaderboardLoading = true;
   try {
     const res = await fetch(`${API_BASE}/leaderboard`, { headers: apiHeaders() });
     const body = await res.json().catch(() => ({}));
@@ -305,6 +311,25 @@ async function loadLeaderboard() {
     state.leaderboard = Array.isArray(body) ? body : [];
   } catch (err) {
     state.leaderboard = [];
+  } finally {
+    state.leaderboardLoading = false;
+    if (state.userMode === null) renderApp();
+  }
+}
+
+async function loadAgentProfiles() {
+  state.agentProfilesLoading = true;
+  try {
+    const res = await fetch(`${API_BASE}/agents/profiles`, { headers: apiHeaders() });
+    const body = await res.json().catch(() => ({}));
+    if (checkInviteRequired(res, body)) return;
+    const data = body && body.profiles;
+    state.agentProfiles = Array.isArray(data) ? data : [];
+  } catch (err) {
+    state.agentProfiles = [];
+  } finally {
+    state.agentProfilesLoading = false;
+    if (state.userMode === null) renderApp();
   }
 }
 
@@ -313,6 +338,7 @@ async function loadMarketsForLanding() {
     const [marketsRes] = await Promise.all([
       fetch(`${API_BASE}/markets`, { headers: apiHeaders() }),
       loadLeaderboard(),
+      loadAgentProfiles(),
     ]);
     const body = await marketsRes.json().catch(() => ({}));
     if (checkInviteRequired(marketsRes, body)) {
@@ -360,6 +386,36 @@ function renderLanding() {
     const pnlClass = pnl >= 0 ? 'leaderboard-pnl-up' : 'leaderboard-pnl-down';
     return `<div class="leaderboard-row"><span class="leaderboard-rank">#${i + 1}</span><span class="leaderboard-name">${escapeHtml(a.agentName || 'Agent')}</span><span class="leaderboard-pnl ${pnlClass}">${pnlStr}</span></div>`;
   });
+  const leaderboardContent = state.leaderboardLoading
+    ? '<p class="leaderboard-empty">Loading…</p>'
+    : (leaderboardRows.length > 0 ? leaderboardRows.join('') : '<p class="leaderboard-empty">No agents yet</p>');
+
+  const profiles = state.agentProfiles || [];
+  const profileCards = profiles.map((p) => {
+    const pnl24h = p.pnl24h != null ? Number(p.pnl24h) : 0;
+    const pnl24hStr = pnl24h >= 0 ? `+$${Math.abs(pnl24h).toLocaleString()}` : `-$${Math.abs(pnl24h).toLocaleString()}`;
+    const pnl24hClass = pnl24h >= 0 ? 'agent-profile-pnl-up' : 'agent-profile-pnl-down';
+    const tierLabel = (p.trustTier || 'UNVERIFIED').replace(/_/g, ' ');
+    const lastActivity = p.lastActivityAt
+      ? new Date(p.lastActivityAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '—';
+    return `
+      <div class="agent-profile-card">
+        <div class="agent-profile-name">${escapeHtml(p.name || 'Agent')}</div>
+        <div class="agent-profile-tier">${escapeHtml(tierLabel)}</div>
+        <div class="agent-profile-stats">
+          <span>Balance: $${Number(p.balance ?? 0).toLocaleString()}</span>
+          <span class="agent-profile-pnl ${pnl24hClass}">24h: ${pnl24hStr}</span>
+          <span>Valuations: ${Number(p.valuationCount ?? 0).toLocaleString()}</span>
+        </div>
+        <div class="agent-profile-activity">Last activity: ${lastActivity}</div>
+      </div>
+    `;
+  });
+  const profilesContent = state.agentProfilesLoading
+    ? '<p class="agent-profiles-empty">Loading…</p>'
+    : (profileCards.length > 0 ? profileCards.join('') : '<p class="agent-profiles-empty">No agent profiles yet</p>');
+
   const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
   root.innerHTML = `
     <div class="landing">
@@ -388,9 +444,15 @@ function renderLanding() {
         </div>
       </div>
       <div class="landing-leaderboard">
-        <h3 class="landing-leaderboard-title">Top agents</h3>
+        <h3 class="landing-leaderboard-title">Top agents (by PnL)</h3>
         <div class="leaderboard-list">
-          ${leaderboardRows.length > 0 ? leaderboardRows.join('') : '<p class="leaderboard-empty">No agents yet</p>'}
+          ${leaderboardContent}
+        </div>
+      </div>
+      <div class="landing-agent-profiles">
+        <h3 class="landing-agent-profiles-title">Agent profiles</h3>
+        <div class="agent-profiles-grid">
+          ${profilesContent}
         </div>
       </div>
     </div>

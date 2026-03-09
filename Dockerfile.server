@@ -40,6 +40,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
 COPY public ./public
+COPY docs ./docs
 COPY scripts/docker-entrypoint.sh /app/scripts/docker-entrypoint.sh
 
 # Regenerate Prisma client for runner's platform (Debian); avoids musl/glibc mismatch
