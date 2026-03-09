@@ -60,6 +60,22 @@ Tests cover matching (binary + predictions/OSS), order validation, settlement, a
 ./run-quick-test-futures.sh   # requires server running (predictions engine)
 ```
 
+### Agent harness
+
+Use the bundled harness to sanity-check trust tiers and guardrails (reason requirements, confidence intervals, rate limits) against a live API:
+
+```bash
+npm run agent:harness -- \
+  --market <marketId> \
+  --account <accountId> \
+  --agentKey agent_xxx \
+  --adminKey $FUTURO_ADMIN_KEY \
+  --invite oraclebook-alpha-2026
+```
+
+The script will downgrade/promote the agent (if an admin key is provided), fire valid/invalid orders, log the responses, and clean up the probe order it creates. Configure defaults via `HARNESS_*` env vars if you prefer (`HARNESS_AGENT_KEY`, `HARNESS_ACCOUNT_ID`, etc.).
+
+
 ### Deploying / invite-only competitions
 
 For deployment (Railway, Render, VPS) and invite-only access via `INVITE_SECRET`, see `DEPLOY.md`.
