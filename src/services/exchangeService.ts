@@ -5,19 +5,19 @@ import { MarketRepository } from '../repositories/marketRepository';
 import { OrderRepository } from '../repositories/orderRepository';
 import { TradeRepository } from '../repositories/tradeRepository';
 import { AccountRepository } from '../repositories/accountRepository';
-import { LedgerService } from './ledgerService';
-import { broadcast } from './wsBroadcast';
-import { MatchingEngine, OrderBook } from '../engine/matching';
+import { MatchingEngine } from '../engine/matching';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 import { matchOrderWithOss } from '../engine/ossMatchingAdapter';
+import { validateOrder } from '../engine/riskEngine';
+import { getOrderBookManager } from './orderBookManager';
 import { Order, createOrder, OrderInput, OrderValidator } from '../domain/order';
-import { MarketLifecycle } from '../domain/market';
-import { MarketState, OrderSide, OrderStatus } from '../domain/types';
+import { OrderStatus } from '../domain/types';
 import {
   OrderRejectionError,
   ORDER_REJECTION_CODES,
 } from '../errors/orderRejection';
 import { matchingLatencyMs } from './metrics';
+import { emit } from '../events/eventBus';
 
 /**
  * ExchangeService orchestrates all exchange operations
@@ -28,7 +28,6 @@ export class ExchangeService {
   private orderRepo = new OrderRepository();
   private tradeRepo = new TradeRepository();
   private accountRepo = new AccountRepository();
-  private ledgerService = new LedgerService();
   private prisma = getPrismaClient();
 
   /**
@@ -39,137 +38,36 @@ export class ExchangeService {
     order: Order;
     trades: any[];
   }> {
-    // Validate order
-    const errors = OrderValidator.validate(input);
-    if (errors.length > 0) {
-      throw new OrderRejectionError(
-        ORDER_REJECTION_CODES.VALIDATION_FAILED,
-        `Invalid order: ${errors.join(', ')}`
-      );
-    }
-
-    // Check market state
     const market = await this.marketRepo.findById(input.marketId);
     if (!market) {
       throw new OrderRejectionError(ORDER_REJECTION_CODES.MARKET_NOT_FOUND, 'Market not found');
     }
 
-    if (!MarketLifecycle.isTradingAllowed(market.state)) {
-      throw new OrderRejectionError(
-        ORDER_REJECTION_CODES.TRADING_NOT_ALLOWED,
-        `Trading not allowed in market state: ${market.state}`,
-        { marketState: market.state }
-      );
-    }
-
-    // Price bounds (for limit orders)
-    if (input.type === 'LIMIT' && input.price != null) {
-      const price = input.price;
-      const minNum = market.minPrice != null ? Number(market.minPrice) : undefined;
-      const maxNum = market.maxPrice != null ? Number(market.maxPrice) : undefined;
-      if (market.minPrice != null && price.lt(market.minPrice)) {
-        throw new OrderRejectionError(
-          ORDER_REJECTION_CODES.PRICE_BELOW_MIN,
-          `Price ${price} below market minimum ${market.minPrice}`,
-          { marketMin: minNum, marketMax: maxNum }
-        );
-      }
-      if (market.maxPrice != null && price.gt(market.maxPrice)) {
-        throw new OrderRejectionError(
-          ORDER_REJECTION_CODES.PRICE_ABOVE_MAX,
-          `Price ${price} above market maximum ${market.maxPrice}`,
-          { marketMin: minNum, marketMax: maxNum }
-        );
-      }
-
-      // Tick size: 0.1 (<10), 1 (10-100), 10 (>100)
-      const tick = price.lt(10) ? new Decimal(0.1) : price.lt(100) ? new Decimal(1) : new Decimal(10);
-      const remainder = price.div(tick).minus(price.div(tick).round());
-      if (remainder.abs().gte(0.0001)) {
-        throw new OrderRejectionError(
-          ORDER_REJECTION_CODES.INVALID_TICK_SIZE,
-          `Price ${price} invalid: tick size ${tick} (0.1 below 10, 1 for 10-100, 10 above 100)`,
-          { tick: tick.toNumber() }
-        );
-      }
-    }
-
-    // Max order notional: price × quantity cannot exceed 100
-    const MAX_ORDER_NOTIONAL = 100;
-    const orderPrice =
-      input.type === 'LIMIT' && input.price != null
-        ? input.price
-        : new Decimal((market.maxPrice ?? 100).toString());
-    const notional = orderPrice.times(input.quantity);
-    if (notional.gt(MAX_ORDER_NOTIONAL)) {
-      throw new OrderRejectionError(
-        ORDER_REJECTION_CODES.ORDER_SIZE_EXCEEDS_LIMIT,
-        `Order notional (price × quantity) ${notional} would exceed max ${MAX_ORDER_NOTIONAL}`,
-        { maxNotional: MAX_ORDER_NOTIONAL, notional: notional.toNumber() }
-      );
-    }
-
-    // Check account balance (for buy orders)
     const account = await this.accountRepo.findById(input.accountId);
     if (!account) {
       throw new OrderRejectionError(ORDER_REJECTION_CODES.ACCOUNT_NOT_FOUND, 'Account not found');
     }
 
-    const isBuy = [
-      OrderSide.BUY_YES,
-      OrderSide.BUY_NO,
-      OrderSide.BUY,
-    ].includes(input.side);
-    if (isBuy) {
-      const price = input.price || new Decimal(1);
-      const cost = price.times(input.quantity);
-      if (account.balance.lt(cost)) {
-        throw new OrderRejectionError(ORDER_REJECTION_CODES.INSUFFICIENT_BALANCE, 'Insufficient balance');
-      }
-    }
-
-    // Max position: ±$1000 notional per market (futures/OSS)
-    if (isFuturesMarket(market)) {
-      const mult = new Decimal((market.contractMultiplier ?? 1).toString());
-      const currentPos = await this.accountRepo.getPosition(input.accountId, input.marketId);
-      const currentQty = currentPos?.quantity ?? new Decimal(0);
-      const isBuyOrder = [OrderSide.BUY].includes(input.side);
-      const postTradeQty = isBuyOrder
-        ? currentQty.plus(input.quantity)
-        : currentQty.minus(input.quantity);
-      const orderPrice = input.type === 'LIMIT' && input.price != null
-        ? input.price
-        : new Decimal((market.maxPrice ?? 100).toString());
-      const postNotional = orderPrice.times(postTradeQty.abs()).times(mult);
-      const MAX_POSITION_NOTIONAL = 1000;
-      if (postNotional.gt(MAX_POSITION_NOTIONAL)) {
-        throw new OrderRejectionError(
-          ORDER_REJECTION_CODES.POSITION_LIMIT_EXCEEDED,
-          `Position notional ${postNotional} would exceed max ±$${MAX_POSITION_NOTIONAL} per market`,
-          { cap: MAX_POSITION_NOTIONAL, postNotional: postNotional.toNumber() }
-        );
-      }
-    }
-
-    // Max 2 resting buys or 2 resting sells per account per market
-    const MAX_RESTING_PER_SIDE = 2;
-    const { buy: restingBuys, sell: restingSells } = await this.orderRepo.countRestingByAccountAndMarket(
+    const position = isFuturesMarket(market)
+      ? await this.accountRepo.getPosition(input.accountId, input.marketId)
+      : null;
+    const restingCounts = await this.orderRepo.countRestingByAccountAndMarket(
       input.accountId,
       input.marketId
     );
-    const isBuyOrder = [OrderSide.BUY, OrderSide.BUY_YES, OrderSide.BUY_NO].includes(input.side);
-    if (isBuyOrder && restingBuys >= MAX_RESTING_PER_SIDE) {
+
+    const riskResult = validateOrder({
+      input,
+      market,
+      account,
+      position: position ?? undefined,
+      restingCounts,
+    });
+    if (!riskResult.passed) {
       throw new OrderRejectionError(
-        ORDER_REJECTION_CODES.RESTING_ORDERS_LIMIT_EXCEEDED,
-        `Max ${MAX_RESTING_PER_SIDE} active buy orders per market (you have ${restingBuys})`,
-        { limit: MAX_RESTING_PER_SIDE, current: restingBuys, side: 'buy' }
-      );
-    }
-    if (!isBuyOrder && restingSells >= MAX_RESTING_PER_SIDE) {
-      throw new OrderRejectionError(
-        ORDER_REJECTION_CODES.RESTING_ORDERS_LIMIT_EXCEEDED,
-        `Max ${MAX_RESTING_PER_SIDE} active sell orders per market (you have ${restingSells})`,
-        { limit: MAX_RESTING_PER_SIDE, current: restingSells, side: 'sell' }
+        (riskResult.code ?? ORDER_REJECTION_CODES.VALIDATION_FAILED) as any,
+        riskResult.message ?? 'Order validation failed',
+        riskResult.details
       );
     }
 
@@ -178,13 +76,14 @@ export class ExchangeService {
 
     const isFutures = isFuturesMarket(market);
 
+    const orderBookManager = getOrderBookManager();
     const matchStart = process.hrtime.bigint();
     let result;
     if (isFutures) {
-      const restingOrders = await this.buildRestingOrders(input.marketId);
+      const restingOrders = await orderBookManager.getRestingOrdersForFutures(input.marketId);
       result = matchOrderWithOss(order, restingOrders, input.marketId);
     } else {
-      const orderBook = await this.buildOrderBook(input.marketId);
+      const orderBook = await orderBookManager.getBookForBinary(input.marketId);
       result = MatchingEngine.matchOrder(order, orderBook, input.marketId);
     }
     const matchElapsedMs = Number(process.hrtime.bigint() - matchStart) / 1e6;
@@ -305,137 +204,16 @@ export class ExchangeService {
         console.log(`Successfully updated counterparty order ${updated.id}: status=${updated.status}, filledQuantity=${updated.filledQuantity}`);
       }
 
-      // Update positions and balances inside the same transaction (aggregate per account to avoid lost updates)
-      await this.applyTradeSettlements(tx, result.trades);
+      // Ledger, positions, and broadcast via event handlers
+      await emit(
+        { type: 'TradeEvent', payload: { trades: result.trades } },
+        tx
+      );
 
-      // Look up agent names for trade broadcast
-      const accountIds = [...new Set(result.trades.flatMap((t) => [t.buyerAccountId, t.sellerAccountId]))];
-      const agentProfiles = await tx.agentProfile.findMany({
-        where: { accountId: { in: accountIds } },
-        select: { accountId: true, name: true },
-      });
-      const accountToName = Object.fromEntries(agentProfiles.map((p) => [p.accountId, p.name]));
-
-      // Broadcast trades via WebSocket
-      for (const t of result.trades) {
-        broadcast({
-          type: 'trade',
-          payload: {
-            marketId: t.marketId,
-            tradeId: t.id,
-            price: Number(t.price.toString()),
-            quantity: Number(t.quantity.toString()),
-            buyerSide: t.buyerSide,
-            buyerAgentName: accountToName[t.buyerAccountId] ?? null,
-            sellerAgentName: accountToName[t.sellerAccountId] ?? null,
-          },
-        });
-      }
-
-      return {
-        order: savedOrder,
-        trades: result.trades,
-      };
+      const ret = { order: savedOrder, trades: result.trades };
+      orderBookManager.onOrderPlaced(input.marketId, result, isFutures);
+      return ret;
     });
-  }
-
-  /**
-   * Apply position and balance changes from trades. Uses tx so it commits with the order/trade writes.
-   * Balance mutations flow through LedgerService; positions updated directly.
-   */
-  private async applyTradeSettlements(
-    tx: Parameters<Parameters<ReturnType<typeof getPrismaClient>['$transaction']>[0]>[0],
-    trades: any[]
-  ): Promise<void> {
-    if (trades.length === 0) return;
-
-    const isFutures = trades[0].buyerSide === OrderSide.BUY;
-    const balanceDeltaByAccount = new Map<string, Decimal>();
-    const positionDeltaByKey = new Map<string, { qty: Decimal; yesShares: Decimal; noShares: Decimal }>();
-
-    for (const trade of trades) {
-      const cost = trade.price.times(trade.quantity);
-      balanceDeltaByAccount.set(
-        trade.buyerAccountId,
-        (balanceDeltaByAccount.get(trade.buyerAccountId) ?? new Decimal(0)).minus(cost)
-      );
-      balanceDeltaByAccount.set(
-        trade.sellerAccountId,
-        (balanceDeltaByAccount.get(trade.sellerAccountId) ?? new Decimal(0)).plus(cost)
-      );
-
-      if (isFutures) {
-        const qty = trade.quantity;
-        const buyerKey = `${trade.buyerAccountId}:${trade.marketId}`;
-        const sellerKey = `${trade.sellerAccountId}:${trade.marketId}`;
-        const buyerPos = positionDeltaByKey.get(buyerKey) ?? { qty: new Decimal(0), yesShares: new Decimal(0), noShares: new Decimal(0) };
-        const sellerPos = positionDeltaByKey.get(sellerKey) ?? { qty: new Decimal(0), yesShares: new Decimal(0), noShares: new Decimal(0) };
-        buyerPos.qty = buyerPos.qty.plus(qty);
-        sellerPos.qty = sellerPos.qty.minus(qty);
-        positionDeltaByKey.set(buyerKey, buyerPos);
-        positionDeltaByKey.set(sellerKey, sellerPos);
-      } else {
-        const buyerKey = `${trade.buyerAccountId}:${trade.marketId}`;
-        const sellerKey = `${trade.sellerAccountId}:${trade.marketId}`;
-        const buyerPos = positionDeltaByKey.get(buyerKey) ?? { qty: new Decimal(0), yesShares: new Decimal(0), noShares: new Decimal(0) };
-        const sellerPos = positionDeltaByKey.get(sellerKey) ?? { qty: new Decimal(0), yesShares: new Decimal(0), noShares: new Decimal(0) };
-        if (trade.buyerSide === OrderSide.BUY_YES) {
-          buyerPos.yesShares = buyerPos.yesShares.plus(trade.quantity);
-          sellerPos.noShares = sellerPos.noShares.plus(trade.quantity);
-        } else {
-          buyerPos.noShares = buyerPos.noShares.plus(trade.quantity);
-          sellerPos.yesShares = sellerPos.yesShares.plus(trade.quantity);
-        }
-        positionDeltaByKey.set(buyerKey, buyerPos);
-        positionDeltaByKey.set(sellerKey, sellerPos);
-      }
-    }
-
-    // Balance mutations via ledger
-    const journalLines: { accountId: string; debit: Decimal; credit: Decimal }[] = [];
-    for (const [accountId, delta] of balanceDeltaByAccount.entries()) {
-      if (delta.gt(0)) {
-        journalLines.push({ accountId, debit: new Decimal(0), credit: delta });
-      } else if (delta.lt(0)) {
-        journalLines.push({ accountId, debit: delta.abs(), credit: new Decimal(0) });
-      }
-    }
-    if (journalLines.length > 0) {
-      const refId = trades.length === 1 ? trades[0].id : undefined;
-      await this.ledgerService.postJournal(
-        journalLines,
-        { description: 'order_fill', refId },
-        tx as any
-      );
-    }
-
-    for (const [key, delta] of positionDeltaByKey.entries()) {
-      const [accountId, marketId] = key.split(':');
-      const existing = await tx.position.findUnique({
-        where: { accountId_marketId: { accountId, marketId } },
-      });
-      const yes = (existing ? new Decimal(existing.yesShares.toString()) : new Decimal(0)).plus(delta.yesShares);
-      const no = (existing ? new Decimal(existing.noShares.toString()) : new Decimal(0)).plus(delta.noShares);
-      const qty = existing && existing.quantity != null
-        ? new Decimal(existing.quantity.toString()).plus(delta.qty)
-        : delta.qty;
-      const quantityDecimal = isFutures ? new Prisma.Decimal(qty.toString()) : null;
-      await tx.position.upsert({
-        where: { accountId_marketId: { accountId, marketId } },
-        create: {
-          accountId,
-          marketId,
-          yesShares: new Prisma.Decimal(yes.toString()),
-          noShares: new Prisma.Decimal(no.toString()),
-          quantity: quantityDecimal,
-        },
-        update: {
-          yesShares: new Prisma.Decimal(yes.toString()),
-          noShares: new Prisma.Decimal(no.toString()),
-          ...(isFutures && { quantity: quantityDecimal }),
-        },
-      });
-    }
   }
 
   /**
@@ -455,36 +233,16 @@ export class ExchangeService {
       throw new Error('Order cannot be cancelled');
     }
 
-    return await this.orderRepo.cancel(orderId);
-  }
-
-  /**
-   * Build order book from database (binary markets)
-   */
-  private async buildOrderBook(marketId: string): Promise<OrderBook> {
-    const activeOrders = await this.getActiveOrdersForMarket(marketId);
-    const orderBook = new OrderBook();
-    for (const order of activeOrders) {
-      orderBook.addOrder(order);
+    const cancelled = await this.orderRepo.cancel(orderId);
+    const market = await this.marketRepo.findById(order.marketId);
+    if (market) {
+      getOrderBookManager().onOrderCancelled(
+        order.marketId,
+        orderId,
+        isFuturesMarket(market)
+      );
     }
-    return orderBook;
+    return cancelled;
   }
-
-  /**
-   * Build resting orders list for futures (OSS adapter)
-   */
-  private async buildRestingOrders(marketId: string): Promise<Order[]> {
-    return this.getActiveOrdersForMarket(marketId);
-  }
-
-  private async getActiveOrdersForMarket(marketId: string): Promise<Order[]> {
-    const pendingOrders = await this.orderRepo.findByMarket(marketId, OrderStatus.PENDING);
-    const partiallyFilledOrders = await this.orderRepo.findByMarket(marketId, OrderStatus.PARTIALLY_FILLED);
-    return [...pendingOrders, ...partiallyFilledOrders].filter((order) => {
-      const remaining = OrderValidator.remainingQuantity(order);
-      return remaining.gt(0);
-    });
-  }
-
 }
 

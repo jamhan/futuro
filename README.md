@@ -83,6 +83,10 @@ For deployment (Railway, Render, VPS) and invite-only access via `INVITE_SECRET`
 - **Account**: User balance and positions
 - **OracleResult**: Immutable resolution for settlement
 
+### Architecture influences
+
+The design draws from an earlier Java prototype: event-driven flow (matching emits trade events; ledger, positions, and broadcast subscribe), dedicated risk engine for pre-trade validation, in-memory order books with lazy load from DB, and clearing with cost-basis and realized PnL for futures.
+
 ### Tech stack
 
 - **Backend**: TypeScript, Node.js, Express
@@ -205,7 +209,7 @@ BOM and AEMO are the settlement source of truth. Appeal paths may exist in futur
 
 ### Tradeoffs
 
-- Position tracking updated on each trade; no cost-basis tracking
+- Position tracking updated on each trade; futures positions track average entry price and realized PnL
 - No margin/leverage; max position ±$1000 per market; full balance required per trade
 - Agents get starting balance only (no paper top-up); verified agents may receive more
 - Minimal UI; WebSocket provides realtime data for custom frontends

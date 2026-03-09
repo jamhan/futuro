@@ -119,6 +119,136 @@ describe('API', () => {
       await prisma.account.delete({ where: { id: account.id } });
       await prisma.market.delete({ where: { id: marketId } });
     });
+
+    it('creates trades when opposing orders match (binary BUY_YES vs BUY_NO)', async () => {
+      const account1 = await prisma.account.create({ data: { balance: 1000, isPaper: false } });
+      const account2 = await prisma.account.create({ data: { balance: 1000, isPaper: false } });
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Trade match test',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'x > 0',
+          marketType: 'BINARY',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      // Resting: BUY_NO @ 0.4 (sell YES at 0.6 from buyer's perspective)
+      const order1Res = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .send({
+          accountId: account1.id,
+          marketId,
+          side: 'BUY_NO',
+          type: 'LIMIT',
+          price: 0.4,
+          quantity: 5,
+        });
+      expect(order1Res.status).toBe(201);
+      expect(order1Res.body.trades).toHaveLength(0);
+
+      // Incoming: BUY_YES @ 0.6 matches BUY_NO @ 0.4 (0.6 + 0.4 = 1.0)
+      const order2Res = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .send({
+          accountId: account2.id,
+          marketId,
+          side: 'BUY_YES',
+          type: 'LIMIT',
+          price: 0.6,
+          quantity: 5,
+        });
+      expect(order2Res.status).toBe(201);
+      expect(order2Res.body.trades).toHaveLength(1);
+
+      const trade = order2Res.body.trades[0];
+      expect(trade).toMatchObject({
+        buyerAccountId: account2.id,
+        sellerAccountId: account1.id,
+        buyerSide: 'BUY_YES',
+      });
+      expect(Number(trade.price)).toBe(0.4);
+      expect(Number(trade.quantity)).toBe(5);
+
+      // Verify trades are persisted and retrievable
+      const tradesRes = await request(app).get(`/api/markets/${marketId}/trades`);
+      expect(tradesRes.status).toBe(200);
+      expect(tradesRes.body).toHaveLength(1);
+      expect(tradesRes.body[0].id).toBe(trade.id);
+
+      await prisma.market.delete({ where: { id: marketId } });
+      await prisma.account.deleteMany({ where: { id: { in: [account1.id, account2.id] } } });
+    });
+
+    it('creates trades when opposing FUTURES orders match (BUY vs SELL)', async () => {
+      const account1 = await prisma.account.create({ data: { balance: 10000, isPaper: false } });
+      const account2 = await prisma.account.create({ data: { balance: 10000, isPaper: false } });
+
+      const marketRes = await request(app)
+        .post('/api/markets')
+        .set('Content-Type', 'application/json')
+        .send({
+          description: 'Futures trade match test',
+          location: 'Test',
+          eventDate: new Date(Date.now() + 86400000).toISOString(),
+          condition: 'index >= 10',
+          marketType: 'FUTURES',
+        });
+      const marketId = marketRes.body.id;
+      await request(app).post(`/api/markets/${marketId}/open`);
+
+      // Resting: SELL @ 25 (ask)
+      const order1Res = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .send({
+          accountId: account1.id,
+          marketId,
+          side: 'SELL',
+          type: 'LIMIT',
+          price: 25,
+          quantity: 3,
+        });
+      expect(order1Res.status).toBe(201);
+      expect(order1Res.body.trades).toHaveLength(0);
+
+      // Incoming: BUY @ 25 matches SELL @ 25
+      const order2Res = await request(app)
+        .post('/api/orders')
+        .set('Content-Type', 'application/json')
+        .send({
+          accountId: account2.id,
+          marketId,
+          side: 'BUY',
+          type: 'LIMIT',
+          price: 25,
+          quantity: 3,
+        });
+      expect(order2Res.status).toBe(201);
+      expect(order2Res.body.trades).toHaveLength(1);
+
+      const trade = order2Res.body.trades[0];
+      expect(trade).toMatchObject({
+        buyerAccountId: account2.id,
+        sellerAccountId: account1.id,
+        buyerSide: 'BUY',
+      });
+      expect(Number(trade.price)).toBe(25);
+      expect(Number(trade.quantity)).toBe(3);
+
+      const tradesRes = await request(app).get(`/api/markets/${marketId}/trades`);
+      expect(tradesRes.status).toBe(200);
+      expect(tradesRes.body).toHaveLength(1);
+
+      await prisma.market.delete({ where: { id: marketId } });
+      await prisma.account.deleteMany({ where: { id: { in: [account1.id, account2.id] } } });
+    });
   });
 
   describe('POST /api/agents', () => {

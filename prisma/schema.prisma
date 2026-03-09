@@ -160,12 +160,14 @@ model Trade {
 }
 
 model Position {
-  id          String   @id @default(uuid())
-  accountId   String
-  marketId    String
-  yesShares   Decimal  @default(0) @db.Decimal(20, 8)
-  noShares    Decimal  @default(0) @db.Decimal(20, 8)
-  quantity    Decimal? @db.Decimal(20, 8) // Net contracts for FUTURES (positive=long, negative=short)
+  id           String   @id @default(uuid())
+  accountId    String
+  marketId     String
+  yesShares    Decimal  @default(0) @db.Decimal(20, 8)
+  noShares     Decimal  @default(0) @db.Decimal(20, 8)
+  quantity     Decimal? @db.Decimal(20, 8) // Net contracts for FUTURES (positive=long, negative=short)
+  averagePrice Decimal? @db.Decimal(20, 8) // Weighted avg entry price (FUTURES only)
+  realizedPnl  Decimal? @db.Decimal(20, 8) // Realized PnL from closed positions (FUTURES only)
 
   account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   market      Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)

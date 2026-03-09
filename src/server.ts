@@ -11,6 +11,11 @@ import { metricsMiddleware } from './middleware/metricsMiddleware';
 import { registerWsClient } from './services/wsBroadcast';
 import { getMetrics, getContentType } from './services/metrics';
 import { getPrismaClient } from './db/client';
+import { registerTradeHandlers } from './events/tradeHandlers';
+import { LedgerService } from './services/ledgerService';
+
+// Register event handlers (ledger, positions, broadcast)
+registerTradeHandlers({ ledgerService: new LedgerService() });
 
 // Cron jobs run in src/worker.ts (separate process)
 
