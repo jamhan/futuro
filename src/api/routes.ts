@@ -20,6 +20,7 @@ import { getPrismaClient } from '../db/client';
 import { agentRateLimitMiddleware } from '../middleware/agentRateLimit';
 import { requireTrustedAgentMiddleware } from '../middleware/requireTrustedAgent';
 import { agentPerMarketRateLimitMiddleware } from '../middleware/agentPerMarketRateLimit';
+import { requireAdminKey } from '../middleware/requireAdminKey';
 import { isOrderRejectionError } from '../errors/orderRejection';
 import { broadcast } from '../services/wsBroadcast';
 import { z } from 'zod';
@@ -481,6 +482,32 @@ router.get('/accounts/:id', async (req, res) => {
       return res.status(404).json({ error: 'Account not found' });
     }
     res.json(account);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/accounts/:id', requireAdminKey, async (req, res) => {
+  try {
+    const account = await accountRepo.findById(req.params.id);
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+    const [orderCount, tradeCount, positionCount] = await Promise.all([
+      prisma.order.count({ where: { accountId: req.params.id } }),
+      prisma.trade.count({
+        where: { OR: [{ buyerAccountId: req.params.id }, { sellerAccountId: req.params.id }] },
+      }),
+      prisma.position.count({ where: { accountId: req.params.id } }),
+    ]);
+    if (orderCount > 0 || tradeCount > 0 || positionCount > 0) {
+      return res.status(400).json({
+        error: 'Cannot delete account with historical activity',
+        details: { orderCount, tradeCount, positionCount },
+      });
+    }
+    await prisma.account.delete({ where: { id: req.params.id } });
+    res.json({ deleted: req.params.id });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
