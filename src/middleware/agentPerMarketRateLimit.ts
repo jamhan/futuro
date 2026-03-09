@@ -2,10 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import { tryConsume } from '../lib/rateLimit/tokenBucket';
 import { agentRateLimitHitsTotal } from '../services/metrics';
 
-const TRUSTED_IDS = (process.env.AGENT_RATE_LIMIT_TRUSTED_IDS ?? '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+const TRUSTED_IDS = new Set(
+  (process.env.AGENT_RATE_LIMIT_TRUSTED_IDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
 
 const HIT_WARN_THRESHOLD = 10;
 const HIT_WINDOW_MS = 60_000;
@@ -58,7 +60,7 @@ export function agentPerMarketRateLimitMiddleware(
   }
 
   const agentId = req.agent.id;
-  if (TRUSTED_IDS.includes(agentId)) {
+  if (TRUSTED_IDS.has(agentId)) {
     return next();
   }
 

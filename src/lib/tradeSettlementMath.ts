@@ -4,6 +4,8 @@
 
 import Decimal from 'decimal.js';
 
+const D_ZERO = new Decimal(0);
+
 export interface CostBasisTrade {
   price: Decimal;
   qty: Decimal;
@@ -46,7 +48,7 @@ export function computeCostBasis(
       }
     }
     qty = newQty;
-    if (qty.eq(0)) avg = new Decimal(0);
+    if (qty.eq(0)) avg = D_ZERO;
   }
 
   return { quantity: qty, averagePrice: avg, realizedPnl: realized };

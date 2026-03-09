@@ -8,6 +8,10 @@ import {
 import { Order, OrderValidator } from '../domain/order';
 import { Trade, createTrade } from '../domain/trade';
 
+const D_ZERO = new Decimal(0);
+const D_ONE = new Decimal(1);
+const D_HALF = new Decimal(0.5);
+
 /**
  * OrderBook maintains orders for a binary market
  * 
@@ -84,8 +88,8 @@ export class OrderBook {
    */
   private sortYesOrders(): void {
     this.yesOrders.sort((a, b) => {
-      const priceA = a.price || new Decimal(1); // Market orders go to back
-      const priceB = b.price || new Decimal(1);
+      const priceA = a.price ?? D_ONE; // Market orders go to back
+      const priceB = b.price ?? D_ONE;
       const priceDiff = priceB.comparedTo(priceA); // Descending
       if (priceDiff !== 0) return priceDiff;
       return a.createdAt.getTime() - b.createdAt.getTime(); // Ascending (oldest first)
@@ -98,8 +102,8 @@ export class OrderBook {
    */
   private sortNoOrders(): void {
     this.noOrders.sort((a, b) => {
-      const priceA = a.price || new Decimal(0); // Market orders go to front
-      const priceB = b.price || new Decimal(0);
+      const priceA = a.price ?? D_ZERO; // Market orders go to front
+      const priceB = b.price ?? D_ZERO;
       const priceDiff = priceA.comparedTo(priceB); // Ascending (lowest first)
       if (priceDiff !== 0) return priceDiff;
       return a.createdAt.getTime() - b.createdAt.getTime(); // Ascending (oldest first)
@@ -297,8 +301,7 @@ export class MatchingEngine {
     }
 
     // Both are market orders - this shouldn't happen in practice
-    // But if it does, use midpoint (0.5) as fallback
-    return new Decimal(0.5);
+    return D_HALF;
   }
 }
 

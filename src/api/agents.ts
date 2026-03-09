@@ -7,8 +7,7 @@ import Decimal from 'decimal.js';
 import { getPrismaClient } from '../db/client';
 import { LedgerService } from '../services/ledgerService';
 import { ensureSystemAccount, SYSTEM_PAPER_ACCOUNT_ID } from '../services/systemAccount';
-import { getAgentTelemetry } from '../services/leaderboardService';
-import { getAgentPnl24h } from '../services/leaderboardService';
+import { getAgentTelemetry, getAgentPnl24h, getPublicAgentProfiles } from '../services/leaderboardService';
 import { getNextRefillEta } from '../services/paperTopup';
 import { formatAgentSelfProfile } from '../services/agentProfileService';
 import { requireAdminKey } from '../middleware/requireAdminKey';
@@ -47,6 +46,16 @@ router.get('/me/profile', async (req: Request, res: Response) => {
     ]);
     const opsContact = process.env.AGENT_OPS_CONTACT ?? null;
     res.json(formatAgentSelfProfile(profile, { pnl24h, nextRefillEta, opsContact }));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
+  }
+});
+
+router.get('/profiles', async (req: Request, res: Response) => {
+  try {
+    const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;
+    const profiles = await getPublicAgentProfiles(limit);
+    res.json({ profiles });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Internal error' });
   }

@@ -96,37 +96,36 @@ export class OrderRepository {
 
   /**
    * Load resting (PENDING + PARTIALLY_FILLED) orders for a market, filtered by remaining quantity.
-   * Accepts a transaction client for use inside $transaction.
+   * Single query, one Decimal conversion per field per order.
    */
   static async findRestingForMatching(tx: { order: { findMany: any } }, marketId: MarketId): Promise<Order[]> {
-    const pending = await tx.order.findMany({
-      where: { marketId, status: OrderStatus.PENDING },
+    const rows = await tx.order.findMany({
+      where: {
+        marketId,
+        status: { in: [OrderStatus.PENDING, OrderStatus.PARTIALLY_FILLED] },
+      },
       orderBy: { createdAt: 'asc' },
     });
-    const partial = await tx.order.findMany({
-      where: { marketId, status: OrderStatus.PARTIALLY_FILLED },
-      orderBy: { createdAt: 'asc' },
-    });
-    const all = [...pending, ...partial];
-    return all
-      .filter((o) => {
-        const filled = new Decimal(o.filledQuantity.toString());
-        const qty = new Decimal(o.quantity.toString());
-        return qty.gt(filled);
-      })
-      .map((o) => ({
+    const orders: Order[] = [];
+    for (const o of rows) {
+      const filled = new Decimal(o.filledQuantity.toString());
+      const qty = new Decimal(o.quantity.toString());
+      if (!qty.gt(filled)) continue;
+      orders.push({
         id: o.id,
         marketId: o.marketId,
         accountId: o.accountId,
         side: o.side as any,
         type: o.type as any,
         price: o.price ? new Decimal(o.price.toString()) : null,
-        quantity: new Decimal(o.quantity.toString()),
-        filledQuantity: new Decimal(o.filledQuantity.toString()),
+        quantity: qty,
+        filledQuantity: filled,
         status: o.status as OrderStatus,
         createdAt: o.createdAt,
         updatedAt: o.updatedAt,
-      })) as Order[];
+      } as Order);
+    }
+    return orders;
   }
 
   private toDomain(dbOrder: {

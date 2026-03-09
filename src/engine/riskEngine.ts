@@ -17,6 +17,10 @@ const MAX_ORDER_NOTIONAL = 100;
 const MAX_POSITION_NOTIONAL = 1000;
 const MAX_RESTING_PER_SIDE = 2;
 
+const D_TICK_SMALL = new Decimal(0.1);
+const D_TICK_MED = new Decimal(1);
+const D_TICK_LARGE = new Decimal(10);
+
 export interface RiskCheckResult {
   passed: boolean;
   code?: string;
@@ -82,7 +86,7 @@ export function validateOrder(params: RiskValidateInput): RiskCheckResult {
     }
 
     // Tick size: 0.1 (<10), 1 (10-100), 10 (>100)
-    const tick = price.lt(10) ? new Decimal(0.1) : price.lt(100) ? new Decimal(1) : new Decimal(10);
+    const tick = price.lt(10) ? D_TICK_SMALL : price.lt(100) ? D_TICK_MED : D_TICK_LARGE;
     const remainder = price.div(tick).minus(price.div(tick).round());
     if (remainder.abs().gte(0.0001)) {
       return {

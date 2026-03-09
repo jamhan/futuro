@@ -14,6 +14,7 @@ export function registerWsClient(ws: WebSocket): void {
 }
 
 export function broadcast(msg: FeedMessage): void {
+  if (clients.size === 0) return;
   const data = JSON.stringify(msg);
   for (const client of clients) {
     if (client.readyState === 1) {

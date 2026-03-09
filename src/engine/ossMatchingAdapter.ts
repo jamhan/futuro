@@ -1,5 +1,7 @@
 import Decimal from 'decimal.js';
 import { OrderBook as NodeOrderBook, Side as LibSide } from 'nodejs-order-book';
+
+const D_ZERO = new Decimal(0);
 import { Order, OrderValidator } from '../domain/order';
 import { Trade, createTrade } from '../domain/trade';
 import { OrderSide, OrderType } from '../domain/types';
@@ -162,7 +164,7 @@ export function matchOrderWithOss(
   let remainingOrder: Order | null = null;
   const totalFilled = trades.reduce(
     (sum, t) => (t.buyOrderId === incomingOrder.id || t.sellOrderId === incomingOrder.id ? sum.plus(t.quantity) : sum),
-    new Decimal(0)
+    D_ZERO
   );
   const incomingFilled = incomingOrder.filledQuantity.plus(totalFilled);
   if (incomingFilled.gte(incomingOrder.quantity)) {

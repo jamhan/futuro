@@ -1,4 +1,4 @@
-import Decimal from 'decimal.js';
+import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../db/client';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 
@@ -71,17 +71,17 @@ export async function getAgentTelemetry(agentId: string): Promise<{
   pnl: number;
   valuationCount?: number;
 } | null> {
-  const profile = await prisma.agentProfile.findUnique({
-    where: { id: agentId },
-    include: { account: true },
-  });
+  const [profile, valuationCount] = await Promise.all([
+    prisma.agentProfile.findUnique({
+      where: { id: agentId },
+      include: { account: true },
+    }),
+    prisma.valuationSubmission.count({ where: { agentId } }),
+  ]);
   if (!profile) return null;
 
   const balance = Number(profile.account.balance.toString());
   const starting = Number(profile.startingBalance.toString());
-  const valuationCount = await prisma.valuationSubmission.count({
-    where: { agentId },
-  });
 
   return {
     agentId: profile.id,
@@ -106,22 +106,26 @@ export function getDeploymentCapDescription(trustTier: string): string {
 
 /**
  * Sum trade cashflow (seller credits minus buyer debits) for trades in last 24h.
+ * Uses single SQL aggregation instead of loading all trades into memory.
  */
 export async function getAgentPnl24h(accountId: string): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const trades = await prisma.trade.findMany({
-    where: {
-      OR: [{ buyerAccountId: accountId }, { sellerAccountId: accountId }],
-      createdAt: { gte: since },
-    },
-  });
-  let pnl = 0;
-  for (const t of trades) {
-    const amount = Number(t.price.toString()) * Number(t.quantity.toString());
-    if (t.sellerAccountId === accountId) pnl += amount;
-    else pnl -= amount;
-  }
-  return pnl;
+  const rows = await prisma.$queryRaw<
+    Array<{ pnl: string | null }>
+  >(Prisma.sql`
+    SELECT SUM(
+      CASE
+        WHEN "sellerAccountId" = ${accountId} THEN ("price"::float * "quantity"::float)
+        WHEN "buyerAccountId" = ${accountId} THEN -("price"::float * "quantity"::float)
+        ELSE 0
+      END
+    ) AS pnl
+    FROM trades
+    WHERE ("buyerAccountId" = ${accountId} OR "sellerAccountId" = ${accountId})
+      AND "createdAt" >= ${since}
+  `);
+  const val = rows[0]?.pnl;
+  return val != null ? Number(val) : 0;
 }
 
 /**
@@ -160,4 +164,149 @@ export async function getAgentLastActivity(accountId: string): Promise<Date | nu
     select: { createdAt: true },
   });
   return order?.createdAt ?? null;
+}
+
+/**
+ * Batch fetch last order createdAt per accountId. Returns Map<accountId, Date>.
+ * Use for admin list to avoid N+1 queries.
+ */
+export async function getAgentLastActivityBatch(
+  accountIds: string[]
+): Promise<Map<string, Date>> {
+  if (accountIds.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<
+    Array<{ accountId: string; createdAt: Date }>
+  >(Prisma.sql`
+    SELECT "accountId", MAX("createdAt") AS "createdAt"
+    FROM orders
+    WHERE "accountId" IN (${Prisma.join(accountIds)})
+    GROUP BY "accountId"
+  `);
+  return new Map(rows.map((r) => [r.accountId, r.createdAt]));
+}
+
+/**
+ * Batch fetch 24h PnL (trade cashflow) per accountId. Returns Map<accountId, number>.
+ * Accounts with no trades in last 24h are omitted (caller can default to 0).
+ */
+export async function getAgentPnl24hBatch(
+  accountIds: string[]
+): Promise<Map<string, number>> {
+  if (accountIds.length === 0) return new Map();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await prisma.$queryRaw<
+    Array<{ accountId: string; pnl: string | null }>
+  >(Prisma.sql`
+    SELECT sub."accountId", SUM(sub.amt)::float AS pnl
+    FROM (
+      SELECT "sellerAccountId" AS "accountId", ("price"::float * "quantity"::float) AS amt
+      FROM trades
+      WHERE "sellerAccountId" IN (${Prisma.join(accountIds)})
+        AND "createdAt" >= ${since}
+      UNION ALL
+      SELECT "buyerAccountId", -("price"::float * "quantity"::float)
+      FROM trades
+      WHERE "buyerAccountId" IN (${Prisma.join(accountIds)})
+        AND "createdAt" >= ${since}
+    ) sub
+    GROUP BY sub."accountId"
+  `);
+  return new Map(rows.map((r) => [r.accountId, r.pnl != null ? Number(r.pnl) : 0]));
+}
+
+/**
+ * Batch fetch valuation submission count per agentId. Returns Map<agentId, number>.
+ * Agents with no submissions are omitted (caller can default to 0).
+ */
+export async function getAgentValuationCountBatch(
+  agentIds: string[]
+): Promise<Map<string, number>> {
+  if (agentIds.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<
+    Array<{ agentId: string; cnt: bigint }>
+  >(Prisma.sql`
+    SELECT "agentId", COUNT(*)::bigint AS cnt
+    FROM valuation_submissions
+    WHERE "agentId" IN (${Prisma.join(agentIds)})
+    GROUP BY "agentId"
+  `);
+  return new Map(rows.map((r) => [r.agentId, Number(r.cnt)]));
+}
+
+export interface PublicAgentProfile {
+  name: string;
+  trustTier: string;
+  deploymentCapDescription: string;
+  balance: number;
+  startingBalance: number;
+  pnl24h: number;
+  valuationCount: number;
+  lastActivityAt: string | null;
+}
+
+const DEFAULT_PUBLIC_PROFILES_LIMIT = 50;
+const MAX_PUBLIC_PROFILES_LIMIT = 100;
+
+/**
+ * Fetch public agent profiles for the profiles API.
+ * Reuses batch last-activity, 24h PnL, and valuation count helpers.
+ * Sorted by trust tier (TRUSTED first) then balance descending.
+ */
+export async function getPublicAgentProfiles(
+  limit = DEFAULT_PUBLIC_PROFILES_LIMIT
+): Promise<PublicAgentProfile[]> {
+  const take = Math.min(Math.max(1, limit), MAX_PUBLIC_PROFILES_LIMIT);
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      name: string;
+      accountId: string;
+      trustTier: string;
+      balance: unknown;
+      startingBalance: unknown;
+    }>
+  >(Prisma.sql`
+    SELECT ap.id, ap.name, ap."accountId", ap."trustTier",
+           a.balance::float,
+           ap."startingBalance"::float
+    FROM agent_profiles ap
+    JOIN accounts a ON a.id = ap."accountId"
+    WHERE ap.status = 'ACTIVE'
+    ORDER BY
+      CASE ap."trustTier"
+        WHEN 'TRUSTED' THEN 0
+        WHEN 'VERIFIED' THEN 1
+        ELSE 2
+      END,
+      a.balance::float DESC
+    LIMIT ${take}
+  `);
+
+  if (rows.length === 0) return [];
+
+  const accountIds = rows.map((r) => r.accountId);
+  const agentIds = rows.map((r) => r.id);
+
+  const [lastActivityMap, pnl24hMap, valuationCountMap] = await Promise.all([
+    getAgentLastActivityBatch(accountIds),
+    getAgentPnl24hBatch(accountIds),
+    getAgentValuationCountBatch(agentIds),
+  ]);
+
+  return rows.map((r) => {
+    const balance = Number(r.balance);
+    const startingBalance = Number(r.startingBalance);
+    const lastActivity = lastActivityMap.get(r.accountId) ?? null;
+    return {
+      name: r.name,
+      trustTier: r.trustTier,
+      deploymentCapDescription: getDeploymentCapDescription(r.trustTier),
+      balance,
+      startingBalance,
+      pnl24h: pnl24hMap.get(r.accountId) ?? 0,
+      valuationCount: valuationCountMap.get(r.id) ?? 0,
+      lastActivityAt: lastActivity?.toISOString() ?? null,
+    };
+  });
 }

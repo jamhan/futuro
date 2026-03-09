@@ -1,6 +1,9 @@
 import Decimal from 'decimal.js';
 import { Outcome, AccountId, MarketType } from '../domain/types';
 import { Position } from '../domain/account';
+
+const D_ZERO = new Decimal(0);
+const D_ONE = new Decimal(1);
 import { MarketState } from '../domain/types';
 import { getPrismaClient } from '../db/client';
 import { LedgerService } from './ledgerService';
@@ -33,7 +36,7 @@ export class SettlementService {
   calculateBinaryPayout(
     position: Position,
     winningOutcome: Outcome,
-    contractMultiplier: Decimal = new Decimal(1)
+    contractMultiplier: Decimal = D_ONE
   ): Decimal {
     if (winningOutcome === Outcome.YES) {
       return position.yesShares.times(contractMultiplier).minus(position.noShares.times(contractMultiplier));
@@ -47,9 +50,9 @@ export class SettlementService {
   calculateFuturesPayout(
     position: Position,
     indexValue: Decimal,
-    contractMultiplier: Decimal = new Decimal(1)
+    contractMultiplier: Decimal = D_ONE
   ): Decimal {
-    const qty = position.quantity ?? new Decimal(0);
+    const qty = position.quantity ?? D_ZERO;
     return qty.times(indexValue).times(contractMultiplier);
   }
 
@@ -65,7 +68,7 @@ export class SettlementService {
       contractMultiplier?: Decimal;
     }
   ): Decimal {
-    const mult = options?.contractMultiplier ?? new Decimal(1);
+    const mult = options?.contractMultiplier ?? D_ONE;
     if (options?.marketType === MarketType.FUTURES && options?.indexValue != null) {
       return this.calculateFuturesPayout(position, options.indexValue, mult);
     }
@@ -107,7 +110,7 @@ export class SettlementService {
     const newBalances = new Map<AccountId, Decimal>();
 
     for (const [accountId, payout] of settlements.entries()) {
-      const currentBalance = existingBalances.get(accountId) || new Decimal(0);
+      const currentBalance = existingBalances.get(accountId) || D_ZERO;
       // Settlement adds the payout to the balance
       // Note: In a real system, we'd track settlement state to make this idempotent
       newBalances.set(accountId, currentBalance.plus(payout));
@@ -131,11 +134,11 @@ export class SettlementService {
   ): { isValid: boolean; totalValue: Decimal; totalCash: Decimal } {
     const totalPayout = positions.reduce(
       (sum, pos) => sum.plus(this.calculatePayout(pos, winningOutcome, options)),
-      new Decimal(0)
+      D_ZERO
     );
     const totalCash = Array.from(balances.values()).reduce(
       (sum, balance) => sum.plus(balance),
-      new Decimal(0)
+      D_ZERO
     );
     return {
       isValid: true,
@@ -199,7 +202,7 @@ export class SettlementService {
         const winningOutcome = (market.oracleResult!.outcome as Outcome) || Outcome.YES;
         const indexValue = new Decimal(market.oracleResult!.value.toString());
         const contractMultiplier =
-          market.contractMultiplier != null ? new Decimal(market.contractMultiplier.toString()) : new Decimal(1);
+          market.contractMultiplier != null ? new Decimal(market.contractMultiplier.toString()) : D_ONE;
 
         const options = isFuturesMarket(market)
           ? { marketType: MarketType.FUTURES, indexValue, contractMultiplier }
@@ -211,9 +214,9 @@ export class SettlementService {
         for (const [accountId, payout] of settlements) {
           const p = new Decimal(payout.toString());
           if (p.gt(0)) {
-            journalLines.push({ accountId, debit: new Decimal(0), credit: p });
+            journalLines.push({ accountId, debit: D_ZERO, credit: p });
           } else if (p.lt(0)) {
-            journalLines.push({ accountId, debit: p.abs(), credit: new Decimal(0) });
+            journalLines.push({ accountId, debit: p.abs(), credit: D_ZERO });
           }
         }
 
@@ -227,19 +230,27 @@ export class SettlementService {
         }
 
         // Write audit rows (one per account with non-zero delta)
+        const auditRows: {
+          marketId: string;
+          accountId: string;
+          delta: string;
+          journalId: string | null;
+          settlementStatusId: string;
+        }[] = [];
         for (const [accountId, payout] of settlements) {
           const delta = new Decimal(payout.toString());
           if (!delta.isZero()) {
-            await tx.settlementAudit.create({
-              data: {
-                marketId,
-                accountId,
-                delta: delta.toString(),
-                journalId,
-                settlementStatusId: status.id,
-              },
+            auditRows.push({
+              marketId,
+              accountId,
+              delta: delta.toString(),
+              journalId,
+              settlementStatusId: status.id,
             });
           }
+        }
+        if (auditRows.length > 0) {
+          await tx.settlementAudit.createMany({ data: auditRows });
         }
 
         // Transition market to SETTLED

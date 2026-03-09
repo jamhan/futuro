@@ -7,6 +7,7 @@ import { SettlementService } from '../services/settlement';
 import {
   getDeploymentCapDescription,
   getAgentLastActivity,
+  getAgentLastActivityBatch,
   getAgentPnl24h,
   getAgentExposure,
 } from '../services/leaderboardService';
@@ -146,11 +147,13 @@ router.get('/agents', requireAdminKey, async (req, res) => {
       prisma.agentProfile.count({ where }),
     ]);
 
-    const items = await Promise.all(
-      profiles.map(async (p) => {
-        const lastHeartbeat = await getAgentLastActivity(p.accountId);
-        return formatAdminListItem(p, lastHeartbeat);
-      })
+    const accountIds = profiles.map((p) => p.accountId);
+    const lastActivityMap =
+      accountIds.length > 0
+        ? await getAgentLastActivityBatch(accountIds)
+        : new Map<string, Date>();
+    const items = profiles.map((p) =>
+      formatAdminListItem(p, lastActivityMap.get(p.accountId) ?? null)
     );
 
     res.json({

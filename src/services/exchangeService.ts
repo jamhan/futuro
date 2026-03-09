@@ -38,29 +38,27 @@ export class ExchangeService {
     order: Order;
     trades: any[];
   }> {
-    const market = await this.marketRepo.findById(input.marketId);
+    const [market, account, position, restingCounts] = await Promise.all([
+      this.marketRepo.findById(input.marketId),
+      this.accountRepo.findById(input.accountId),
+      this.accountRepo.getPosition(input.accountId, input.marketId),
+      this.orderRepo.countRestingByAccountAndMarket(input.accountId, input.marketId),
+    ]);
+
     if (!market) {
       throw new OrderRejectionError(ORDER_REJECTION_CODES.MARKET_NOT_FOUND, 'Market not found');
     }
-
-    const account = await this.accountRepo.findById(input.accountId);
     if (!account) {
       throw new OrderRejectionError(ORDER_REJECTION_CODES.ACCOUNT_NOT_FOUND, 'Account not found');
     }
 
-    const position = isFuturesMarket(market)
-      ? await this.accountRepo.getPosition(input.accountId, input.marketId)
-      : null;
-    const restingCounts = await this.orderRepo.countRestingByAccountAndMarket(
-      input.accountId,
-      input.marketId
-    );
+    const positionIfFutures = isFuturesMarket(market) ? position : null;
 
     const riskResult = validateOrder({
       input,
       market,
       account,
-      position: position ?? undefined,
+      position: positionIfFutures ?? undefined,
       restingCounts,
     });
     if (!riskResult.passed) {
@@ -157,56 +155,18 @@ export class ExchangeService {
       }
 
       // Update counterparty orders (resting orders that were in the book) with their matched state.
-      // The counterparty is the order that was already in the book — i.e. the one that is NOT the incoming order.
-      // When incoming is BUY, counterparty = resting SELL = sellOrderId. When incoming is SELL, counterparty = resting BUY = buyOrderId.
-      const counterpartyFills = new Map<string, Decimal>();
-      const incomingOrderId = (result.remainingOrder ?? order).id;
-
-      for (const trade of result.trades) {
-        const counterpartyOrderId =
-          trade.buyOrderId === incomingOrderId ? trade.sellOrderId : trade.buyOrderId;
-        const currentFills = counterpartyFills.get(counterpartyOrderId) || new Decimal(0);
-        counterpartyFills.set(counterpartyOrderId, currentFills.plus(trade.quantity));
-      }
-
-      // Update all counterparty orders in the DB so the book reflects filled quantity on next match
-      for (const [orderId, additionalFills] of counterpartyFills.entries()) {
-        // Get current order state from database
-        const currentOrder = await tx.order.findUnique({
-          where: { id: orderId },
-        });
-        
-        if (!currentOrder) {
-          console.error(`Counterparty order ${orderId} not found in database!`);
-          continue;
-        }
-        
-        // Calculate new filled quantity
-        const currentFilled = new Decimal(currentOrder.filledQuantity.toString());
-        const newFilled = currentFilled.plus(additionalFills);
-        const totalQuantity = new Decimal(currentOrder.quantity.toString());
-        
-        // Determine new status
-        let newStatus = currentOrder.status;
-        if (newFilled.gte(totalQuantity)) {
-          newStatus = 'FILLED';
-        } else if (newFilled.gt(0)) {
-          newStatus = 'PARTIALLY_FILLED';
-        }
-        
-        console.log(`Updating counterparty order ${orderId}: currentFilled=${currentFilled.toString()}, adding=${additionalFills.toString()}, newFilled=${newFilled.toString()}, status=${newStatus}`);
-        
-        // Update the order
-        const updated = await tx.order.update({
-          where: { id: orderId },
-          data: {
-            filledQuantity: new Prisma.Decimal(newFilled.toString()),
-            status: newStatus,
-          },
-        });
-        
-        console.log(`Successfully updated counterparty order ${updated.id}: status=${updated.status}, filledQuantity=${updated.filledQuantity}`);
-      }
+      // Use result.updatedCounterpartyOrders — matching already computed final filledQuantity/status.
+      await Promise.all(
+        result.updatedCounterpartyOrders.map((cp) =>
+          tx.order.update({
+            where: { id: cp.id },
+            data: {
+              filledQuantity: new Prisma.Decimal(cp.filledQuantity.toString()),
+              status: cp.status,
+            },
+          })
+        )
+      );
 
       // Ledger, positions, and broadcast via event handlers
       await emit(

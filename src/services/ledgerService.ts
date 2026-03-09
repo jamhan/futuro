@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../db/client';
 import { ledgerJournalsTotal } from './metrics';
 
+const D_ZERO = new Decimal(0);
+
 export interface JournalLineInput {
   accountId: string;
   debit: Decimal;
@@ -39,14 +41,8 @@ export class LedgerService {
   ): Promise<string> {
     const client = tx ?? this.prisma;
 
-    const totalDebit = lines.reduce(
-      (sum, l) => sum.plus(l.debit),
-      new Decimal(0)
-    );
-    const totalCredit = lines.reduce(
-      (sum, l) => sum.plus(l.credit),
-      new Decimal(0)
-    );
+    const totalDebit = lines.reduce((sum, l) => sum.plus(l.debit), D_ZERO);
+    const totalCredit = lines.reduce((sum, l) => sum.plus(l.credit), D_ZERO);
     if (!totalDebit.minus(totalCredit).isZero()) {
       throw new Error(
         `Journal unbalanced: debits=${totalDebit} credits=${totalCredit}`
@@ -61,32 +57,49 @@ export class LedgerService {
     });
 
     const accountDeltas = new Map<string, Decimal>();
+    const linesToCreate: {
+      journalId: string;
+      accountId: string;
+      debit: Prisma.Decimal;
+      credit: Prisma.Decimal;
+    }[] = [];
+
     for (const line of lines) {
       const delta = line.credit.minus(line.debit);
       if (!delta.isZero()) {
         accountDeltas.set(
           line.accountId,
-          (accountDeltas.get(line.accountId) ?? new Decimal(0)).plus(delta)
+          (accountDeltas.get(line.accountId) ?? D_ZERO).plus(delta)
         );
-        await client.journalLine.create({
-          data: {
-            journalId: journal.id,
-            accountId: line.accountId,
-            debit: new Prisma.Decimal(line.debit.toString()),
-            credit: new Prisma.Decimal(line.credit.toString()),
-          },
+        linesToCreate.push({
+          journalId: journal.id,
+          accountId: line.accountId,
+          debit: new Prisma.Decimal(line.debit.toString()),
+          credit: new Prisma.Decimal(line.credit.toString()),
         });
       }
     }
 
-    for (const [accountId, delta] of accountDeltas.entries()) {
-      const acc = await client.account.findUnique({ where: { id: accountId } });
-      if (!acc) continue;
-      const newBalance = new Decimal(acc.balance.toString()).plus(delta);
-      await client.account.update({
-        where: { id: accountId },
-        data: { balance: new Prisma.Decimal(newBalance.toString()) },
+    if (linesToCreate.length > 0) {
+      await client.journalLine.createMany({ data: linesToCreate });
+    }
+
+    const accountIds = [...accountDeltas.keys()];
+    if (accountIds.length > 0) {
+      const accounts = await client.account.findMany({
+        where: { id: { in: accountIds } },
       });
+      const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+      for (const [accountId, delta] of accountDeltas.entries()) {
+        const acc = accountMap.get(accountId);
+        if (!acc) continue;
+        const newBalance = new Decimal(acc.balance.toString()).plus(delta);
+        await client.account.update({
+          where: { id: accountId },
+          data: { balance: new Prisma.Decimal(newBalance.toString()) },
+        });
+      }
     }
 
     ledgerJournalsTotal.inc({ description: options.description });
