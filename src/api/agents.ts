@@ -17,6 +17,12 @@ const router = Router();
 const prisma = getPrismaClient();
 const ledgerService = new LedgerService();
 
+type TrustTier = 'UNVERIFIED' | 'VERIFIED' | 'TRUSTED';
+
+const patchTrustSchema = z.object({
+  trustTier: z.enum(['UNVERIFIED', 'VERIFIED', 'TRUSTED']),
+});
+
 const createAgentSchema = z.object({
   name: z.string().min(1),
 });
@@ -121,6 +127,62 @@ router.post('/', requireAdminKey, async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.errors });
     }
     res.status(500).json({ error: error instanceof Error ? error.message : 'Internal error' });
+  }
+});
+
+async function promoteAgentTrust(
+  where:
+    | { id: string; accountId?: undefined }
+    | { id?: undefined; accountId: string },
+  trustTier: TrustTier
+) {
+  const profile = await prisma.agentProfile.findUnique({
+    where: 'id' in where ? { id: where.id } : { accountId: where.accountId },
+  });
+  if (!profile) {
+    return null;
+  }
+  const updated = await prisma.agentProfile.update({
+    where: { id: profile.id },
+    data: { trustTier },
+  });
+  return {
+    id: updated.id,
+    name: updated.name,
+    trustTier: updated.trustTier,
+    accountId: updated.accountId,
+  };
+}
+
+router.patch('/by-account/:accountId/trust', requireAdminKey, async (req: Request, res: Response) => {
+  try {
+    const body = patchTrustSchema.parse(req.body);
+    const result = await promoteAgentTrust({ accountId: req.params.accountId }, body.trustTier as TrustTier);
+    if (!result) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    res.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to update trust tier' });
+  }
+});
+
+router.patch('/:id/trust', requireAdminKey, async (req: Request, res: Response) => {
+  try {
+    const body = patchTrustSchema.parse(req.body);
+    const result = await promoteAgentTrust({ id: req.params.id }, body.trustTier as TrustTier);
+    if (!result) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    res.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to update trust tier' });
   }
 });
 
