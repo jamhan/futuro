@@ -14,8 +14,8 @@ coverage
 eslint.config.js
 
 # Docs and misc
-docs
 *.md
+!docs/**
 .env*
 !.env.example
 
