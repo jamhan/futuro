@@ -672,6 +672,46 @@
       color: var(--color-dark-muted);
       font-size: 0.9rem;
     }
+    .leaderboard-panel {
+      background: var(--color-dark-surface);
+      border: 1px solid var(--color-dark-border);
+      border-radius: var(--radius);
+      padding: var(--space-20);
+    }
+    .leaderboard-panel-title {
+      margin: 0 0 var(--space-12);
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-dark-muted);
+    }
+    .market-layout {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-24);
+    }
+    .market-layout-sidebar {
+      position: relative;
+    }
+    @media (min-width: 960px) {
+      .market-layout {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+      .market-layout-main {
+        flex: 1;
+      }
+      .market-layout-sidebar {
+        width: 320px;
+        position: sticky;
+        top: var(--space-24);
+      }
+    }
+    .market-leaderboard-section {
+      margin-top: var(--space-32);
+    }
     .landing-agent-profiles {
       margin-top: var(--space-32);
     }

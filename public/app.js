@@ -48,6 +48,16 @@ let state = {
 
 let marketWs = null;
 
+let leaderboardInterval = null;
+
+function startLeaderboardPolling(intervalMs = 60000) {
+  if (leaderboardInterval != null) return;
+  loadLeaderboard();
+  leaderboardInterval = setInterval(() => {
+    loadLeaderboard();
+  }, intervalMs);
+}
+
 function connectMarketWs() {
   if (!state.market) return;
   disconnectMarketWs();
@@ -313,7 +323,7 @@ async function loadLeaderboard() {
     state.leaderboard = [];
   } finally {
     state.leaderboardLoading = false;
-    if (state.userMode === null) renderApp();
+    renderApp();
   }
 }
 
@@ -363,6 +373,29 @@ async function loadMarketsForLanding() {
   }
 }
 
+function renderLeaderboardContent() {
+  const leaderboardRows = (state.leaderboard || []).map((a, i) => {
+    const pnl = a.pnl != null ? Number(a.pnl) : 0;
+    const pnlStr = pnl >= 0 ? `+$${Math.abs(pnl).toLocaleString()}` : `-$${Math.abs(pnl).toLocaleString()}`;
+    const pnlClass = pnl >= 0 ? 'leaderboard-pnl-up' : 'leaderboard-pnl-down';
+    return `<div class="leaderboard-row"><span class="leaderboard-rank">#${i + 1}</span><span class="leaderboard-name">${escapeHtml(a.agentName || 'Agent')}</span><span class="leaderboard-pnl ${pnlClass}">${pnlStr}</span></div>`;
+  });
+  if (state.leaderboardLoading) {
+    return '<p class="leaderboard-empty">Loading…</p>';}
+  return leaderboardRows.length > 0 ? leaderboardRows.join('') : '<p class="leaderboard-empty">No agents yet</p>';
+}
+
+function renderLeaderboardPanel(title = 'Top agents (by PnL)') {
+  return `
+    <div class="leaderboard-panel">
+      <h3 class="leaderboard-panel-title">${escapeHtml(title)}</h3>
+      <div class="leaderboard-list">
+        ${renderLeaderboardContent()}
+      </div>
+    </div>
+  `;
+}
+
 function renderLanding() {
   const root = document.getElementById('root');
   if (!root) return;
@@ -380,16 +413,6 @@ function renderLanding() {
       </a>
     `;
   });
-  const leaderboardRows = (state.leaderboard || []).map((a, i) => {
-    const pnl = a.pnl != null ? Number(a.pnl) : 0;
-    const pnlStr = pnl >= 0 ? `+$${Math.abs(pnl).toLocaleString()}` : `-$${Math.abs(pnl).toLocaleString()}`;
-    const pnlClass = pnl >= 0 ? 'leaderboard-pnl-up' : 'leaderboard-pnl-down';
-    return `<div class="leaderboard-row"><span class="leaderboard-rank">#${i + 1}</span><span class="leaderboard-name">${escapeHtml(a.agentName || 'Agent')}</span><span class="leaderboard-pnl ${pnlClass}">${pnlStr}</span></div>`;
-  });
-  const leaderboardContent = state.leaderboardLoading
-    ? '<p class="leaderboard-empty">Loading…</p>'
-    : (leaderboardRows.length > 0 ? leaderboardRows.join('') : '<p class="leaderboard-empty">No agents yet</p>');
-
   const profiles = state.agentProfiles || [];
   const profileCards = profiles.map((p) => {
     const pnl24h = p.pnl24h != null ? Number(p.pnl24h) : 0;
@@ -444,10 +467,7 @@ function renderLanding() {
         </div>
       </div>
       <div class="landing-leaderboard">
-        <h3 class="landing-leaderboard-title">Top agents (by PnL)</h3>
-        <div class="leaderboard-list">
-          ${leaderboardContent}
-        </div>
+        ${renderLeaderboardPanel()}
       </div>
       <div class="landing-agent-profiles">
         <h3 class="landing-agent-profiles-title">Agent profiles</h3>
@@ -767,7 +787,17 @@ function renderApp() {
         loadMarkets();
         root.innerHTML = '<div class="page-dark"><div class="loading-state">Loading markets...</div></div>';
       } else {
-        root.innerHTML = '<div class="page-dark">' + renderMarketPicker(state.markets) + '</div>';
+        const pickerHtml = renderMarketPicker(state.markets);
+        root.innerHTML = `
+          <div class="page-dark">
+            <div class="market-layout">
+              <div class="market-layout-main">${pickerHtml}</div>
+              <aside class="market-layout-sidebar">
+                ${renderLeaderboardPanel()}
+              </aside>
+            </div>
+          </div>
+        `;
         attachPickerListeners();
       }
     }
@@ -942,6 +972,9 @@ function renderApp() {
         </div>
       `}).join('')}
     </div>
+    <div class="market-leaderboard-section">
+      ${renderLeaderboardPanel()}
+    </div>
     </div>
   `;
 }
@@ -985,6 +1018,8 @@ window.addEventListener('popstate', () => {
     renderApp();
   }
 });
+
+startLeaderboardPolling();
 
 // Initialize
 const marketId = new URLSearchParams(window.location.search).get('market');
