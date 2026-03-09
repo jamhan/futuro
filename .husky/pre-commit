@@ -1,4 +1,9 @@
 # Prevent .env from being staged (per SECURITY-AUDIT.md)
 ./scripts/check-no-env-staged.sh
 
-npm test
+# Run only the fast/unit suite by default so local commits don't need DB env.
+if [ "$SKIP_TESTS" = "1" ]; then
+  echo "SKIP_TESTS=1 → skipping npm run test:fast"
+else
+  npm run test:fast
+fi

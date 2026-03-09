@@ -13,7 +13,7 @@ import { MockWeatherOracle } from '../services/oracle';
 import { getLeaderboard } from '../services/leaderboardService';
 import { agentOrdersTotal, agentOrderRejectionsTotal } from '../services/metrics';
 import { getIndexValueForMarket } from '../services/indexProviders';
-import { MarketLifecycle } from '../domain/market';
+import { MarketLifecycle, Market } from '../domain/market';
 import { isFuturesMarket } from '../engine/futuresMatchingGuard';
 import { MarketState, MarketType, OrderSide, OrderType, Outcome } from '../domain/types';
 import { getPrismaClient } from '../db/client';
@@ -33,6 +33,25 @@ const orderRepo = new OrderRepository();
 const tradeRepo = new TradeRepository();
 const accountRepo = new AccountRepository();
 const oracleService = new OracleService(new MockWeatherOracle());
+
+const decimalToNumber = (value?: Decimal | null): number | null =>
+  value != null ? Number(value.toString()) : null;
+
+const buildConfidenceIntervalExample = (market: Market): [number, number] => {
+  const marketType = market.marketType ?? MarketType.BINARY;
+  if (marketType === MarketType.BINARY) {
+    return [0.45, 0.55];
+  }
+  const min = decimalToNumber(market.minPrice);
+  const max = decimalToNumber(market.maxPrice);
+  if (min != null && max != null && max > min) {
+    const span = max - min;
+    const lower = Number((min + span * 0.2).toFixed(2));
+    const upper = Number((min + span * 0.35).toFixed(2));
+    return [lower, upper];
+  }
+  return [10, 12];
+};
 
 // Validation schemas
 const createMarketSchema = z.object({
@@ -111,6 +130,68 @@ router.get('/markets/:id', async (req, res) => {
       return res.status(404).json({ error: 'Market not found' });
     }
     res.json(market);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/markets/:id/reason-schema', async (req, res) => {
+  try {
+    const market = await marketRepo.findById(req.params.id);
+    if (!market) {
+      return res.status(404).json({ error: 'Market not found' });
+    }
+    const marketType = market.marketType ?? MarketType.BINARY;
+    const priceMin = decimalToNumber(market.minPrice) ?? (marketType === MarketType.BINARY ? 0 : null);
+    const priceMax = decimalToNumber(market.maxPrice) ?? (marketType === MarketType.BINARY ? 1 : null);
+    const priceUnits = marketType === MarketType.BINARY ? 'probability (0-1)' : 'index units (same as the settlement feed)';
+    const ciUnits = marketType === MarketType.BINARY ? 'probability (0-1)' : 'index units (e.g., mm, °C, MJ/m²)';
+    const confidenceExample = buildConfidenceIntervalExample(market);
+
+    return res.json({
+      marketId: market.id,
+      marketType,
+      description: market.description,
+      location: market.location,
+      requiresReasonForTrade: true,
+      priceRange: {
+        min: priceMin,
+        max: priceMax,
+        units: priceUnits,
+      },
+      confidenceInterval: {
+        required: true,
+        units: ciUnits,
+        example: confidenceExample,
+        description:
+          marketType === MarketType.BINARY
+            ? 'Provide lower/upper probabilities on the 0-1 scale.'
+            : 'Provide lower/upper bounds in the same units the contract settles in (see market description).',
+      },
+      fields: [
+        {
+          name: 'reason',
+          type: 'string',
+          required: true,
+          description: 'Plain-language summary of the thesis or signal.',
+        },
+        {
+          name: 'theoreticalPriceMethod',
+          type: 'string',
+          required: true,
+          description: 'Model or data method used to derive the quote.',
+        },
+        {
+          name: 'confidenceInterval',
+          type: '[number, number]',
+          required: true,
+          description:
+            marketType === MarketType.BINARY
+              ? 'Lower/upper probabilities that bracket the outcome.'
+              : 'Lower/upper settlement values you expect (same units as the index).',
+        },
+      ],
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
