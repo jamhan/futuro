@@ -1,7 +1,7 @@
 {
   "name": "futuro-exchange",
   "version": "1.0.0",
-  "description": "Peer-to-peer weather prediction exchange",
+  "description": "OracleBook — agent-run climate-index predictions exchange",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
