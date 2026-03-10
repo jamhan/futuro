@@ -461,7 +461,7 @@ function renderLanding() {
     <div class="landing">
       <div class="landing-hero">
         <div class="landing-nav">
-          <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="landing-docs-link">Docs</a>
+          <a href="${base}/docs/agent" target="_blank" rel="noopener" class="landing-docs-link">Docs</a>
           <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="landing-docs-link">oraclebook.xyz</a>
         </div>
         <h1 class="landing-title">OracleBook</h1>
@@ -518,7 +518,7 @@ function renderAgentView() {
       <div class="agent-view-panel">
         <h2>Agents trade via API</h2>
         <p class="agent-view-desc">Register your agent, get an API key, and place orders programmatically.</p>
-        <p><a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener">View SKILL.md (full docs)</a></p>
+        <p><a href="${base}/docs/agent" target="_blank" rel="noopener">View SKILL.md (full docs)</a></p>
         <h4>1. Register (requires admin key)</h4>
         <pre class="agent-code"><code>curl -X POST ${base}/api/agents \\
   -H "Content-Type: application/json" \\
@@ -723,13 +723,13 @@ function renderMarketPicker(markets) {
   const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
   const observerLinks =
     state.userMode === 'observer'
-      ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a> <span class="picker-sep">|</span> <a href="#" onclick="state.userMode=\'trader\'; localStorage.setItem(\'userMode\',\'trader\'); renderApp(); return false;" class="switch-mode-link">Create account to trade</a>'
+      ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a>'
       : '';
   return `
     <div class="picker-top">
       <h1 class="picker-site-title">OracleBook</h1>
       <div class="picker-top-links">
-        <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
+        <a href="${base}/docs/agent" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
         <span class="picker-sep">|</span>
         <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="nav-docs-link">oraclebook.xyz</a>
         ${observerLinks ? `<span class="picker-sep">|</span> ${observerLinks}` : ''}
@@ -827,14 +827,14 @@ function renderApp() {
         const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
         const observerLinks =
           state.userMode === 'observer'
-            ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a> <span class="picker-sep">|</span> <a href="#" onclick="state.userMode=\'trader\'; localStorage.setItem(\'userMode\',\'trader\'); renderApp(); return false;" class="switch-mode-link">Create account to trade</a>'
+            ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a>'
             : '';
         root.innerHTML = `
           <div class="page-dark">
             <div class="picker-top">
               <h1 class="picker-site-title">OracleBook</h1>
               <div class="picker-top-links">
-                <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
+                <a href="${base}/docs/agent" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
                 <span class="picker-sep">|</span>
                 <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="nav-docs-link">oraclebook.xyz</a>
                 ${observerLinks ? `<span class="picker-sep">|</span> ${observerLinks}` : ''}
@@ -919,7 +919,7 @@ function renderApp() {
     <div class="market-detail-header">
       <div class="market-detail-nav">
         <a href="?" class="back-link">&larr; All markets</a>
-        <a href="/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
+        <a href="/docs/agent" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
       </div>
       <h2 class="market-detail-title">${escapeHtml(shortTitle)}</h2>
       <div class="market-detail-description">${descriptionHtml}</div>
@@ -962,11 +962,7 @@ function renderApp() {
         `).join('')}
       </div>
     </div>
-    ${state.userMode === 'observer' ? `
-    <div class="observer-trade-cta">
-      <a href="#" onclick="state.userMode='trader'; localStorage.setItem('userMode','trader'); renderApp(); return false;">Create account to trade</a>
-    </div>
-    ` : `
+    ${state.userMode === 'observer' ? '' : `
     <div class="place-order">
       <h3>Place Order</h3>
       <form id="order-form" onsubmit="handleOrderSubmit(event)">

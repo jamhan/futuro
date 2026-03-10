@@ -27,6 +27,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV WORKER_PORT=8081
+# Required for Fly.io: app must listen on 0.0.0.0 so fly-proxy can reach it
+ENV HOST=0.0.0.0
 
 # OpenSSL for Prisma native engine
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*

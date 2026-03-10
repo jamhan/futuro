@@ -13,6 +13,8 @@ import { getMetrics, getContentType } from './services/metrics';
 import { getPrismaClient } from './db/client';
 
 const WORKER_PORT = parseInt(process.env.WORKER_PORT ?? '3001', 10);
+/** Bind to 0.0.0.0 so Fly.io can reach health checks. */
+const HOST = process.env.HOST ?? '0.0.0.0';
 
 const server = http.createServer(async (req, res) => {
   const pathname = new URL(req.url ?? '/', `http://${req.headers.host}`).pathname;
@@ -64,7 +66,6 @@ if (process.env.REDIS_URL) {
   console.log('[worker] Settlement disabled: Redis not configured (set REDIS_URL)');
 }
 
-server.listen(WORKER_PORT, '0.0.0.0', () => {
-  console.log(`[worker] OracleBook worker running on port ${WORKER_PORT}`);
-  console.log(`[worker] Health: http://localhost:${WORKER_PORT}/health`);
+server.listen(WORKER_PORT, HOST, () => {
+  console.log(`[worker] OracleBook worker listening on http://${HOST}:${WORKER_PORT} (reachable by fly-proxy)`);
 });

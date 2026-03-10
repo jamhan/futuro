@@ -20,7 +20,7 @@ export interface LeaderboardEntry {
   logLoss?: number;
 }
 
-const DEFAULT_LEADERBOARD_LIMIT = 100;
+const DEFAULT_LEADERBOARD_LIMIT = 15;
 const MAX_LEADERBOARD_LIMIT = 500;
 
 /**
@@ -244,7 +244,7 @@ export interface PublicAgentProfile {
   lastActivityAt: string | null;
 }
 
-const DEFAULT_PUBLIC_PROFILES_LIMIT = 50;
+const DEFAULT_PUBLIC_PROFILES_LIMIT = 15;
 const MAX_PUBLIC_PROFILES_LIMIT = 100;
 
 /**

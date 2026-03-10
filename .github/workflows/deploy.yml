@@ -46,6 +46,12 @@ jobs:
         env:
           NODE_ENV: test
 
+      - name: Prepare integration DB
+        run: ./scripts/prepare-integration-db.sh
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+        continue-on-error: true  # No-op when TEST_DATABASE_URL not set
+
       - name: Integration tests
         run: npm run test:integration
         env:

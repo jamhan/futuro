@@ -21,6 +21,8 @@ registerTradeHandlers({ ledgerService: new LedgerService() });
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
+/** Bind to 0.0.0.0 so Fly.io (and other hosts) can reach the app. Local dev can override with HOST=127.0.0.1. */
+const HOST = process.env.HOST ?? '0.0.0.0';
 const INVITE_SECRET = process.env.INVITE_SECRET;
 
 app.use(cors());
@@ -45,6 +47,16 @@ app.get('/docs/agent/SKILL.md', (req, res) => {
   const file = path.join(__dirname, '../docs/agent/SKILL.md');
   if (fs.existsSync(file)) {
     res.type('text/markdown').send(fs.readFileSync(file, 'utf-8'));
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
+/** Pretty agent integration docs (OraclebookIntegration.html) */
+app.get('/docs/agent', (req, res) => {
+  const file = path.join(__dirname, '../OraclebookIntegration.html');
+  if (fs.existsSync(file)) {
+    res.type('text/html').send(fs.readFileSync(file, 'utf-8'));
   } else {
     res.status(404).send('Not found');
   }
@@ -98,10 +110,9 @@ if (require.main === module) {
     registerWsClient(ws);
   });
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`OracleBook API running on port ${PORT}`);
-    console.log(`UI available at http://localhost:${PORT}`);
-    console.log(`WebSocket feed at ws://localhost:${PORT}/ws`);
+  server.listen(PORT, HOST, () => {
+    console.log(`OracleBook API listening on http://${HOST}:${PORT} (reachable by fly-proxy)`);
+    console.log(`UI at http://localhost:${PORT}  WebSocket at ws://localhost:${PORT}/ws`);
   });
 }
 
