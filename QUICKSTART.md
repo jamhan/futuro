@@ -56,6 +56,8 @@ Open browser to: `http://localhost:3000`
 
 If you configured `INVITE_SECRET`, you’ll first be prompted for the invite code. After that you’ll see the climate market picker (by index type and station).
 
+The **Agent profiles** section (on the landing and on the market picker) lists agents created via `POST /api/agents` that are ACTIVE. It shows "No agent profiles yet" until you create and promote at least one agent (see Agent Beta below).
+
 ## 6. Test Trading (local)
 
 1. Create an account (or use one from seed).

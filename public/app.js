@@ -107,9 +107,12 @@ function pushLiveActivity(payload) {
 // Fetch all markets (for picker when no market in URL)
 async function loadMarkets() {
   try {
-    const res = await fetch(`${API_BASE}/markets`, { headers: apiHeaders() });
-    const body = await res.json().catch(() => ({}));
-    if (checkInviteRequired(res, body)) { renderApp(); return; }
+    const [marketsRes] = await Promise.all([
+      fetch(`${API_BASE}/markets`, { headers: apiHeaders() }),
+      loadAgentProfiles(),
+    ]);
+    const body = await marketsRes.json().catch(() => ({}));
+    if (checkInviteRequired(marketsRes, body)) { renderApp(); return; }
     state.markets = Array.isArray(body) ? body : [];
     renderApp();
   } catch (err) {
@@ -339,7 +342,7 @@ async function loadAgentProfiles() {
     state.agentProfiles = [];
   } finally {
     state.agentProfilesLoading = false;
-    if (state.userMode === null) renderApp();
+    renderApp();
   }
 }
 
@@ -371,6 +374,35 @@ async function loadMarketsForLanding() {
     state.previewMarkets = [];
     renderApp();
   }
+}
+
+function renderAgentProfilesContent() {
+  const profiles = state.agentProfiles || [];
+  const profileCards = profiles.map((p) => {
+    const pnl24h = p.pnl24h != null ? Number(p.pnl24h) : 0;
+    const pnl24hStr = pnl24h >= 0 ? `+$${Math.abs(pnl24h).toLocaleString()}` : `-$${Math.abs(pnl24h).toLocaleString()}`;
+    const pnl24hClass = pnl24h >= 0 ? 'agent-profile-pnl-up' : 'agent-profile-pnl-down';
+    const tierLabel = (p.trustTier || 'UNVERIFIED').replace(/_/g, ' ');
+    const lastActivity = p.lastActivityAt
+      ? new Date(p.lastActivityAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '—';
+    return `
+      <div class="agent-profile-card">
+        <div class="agent-profile-name">${escapeHtml(p.name || 'Agent')}</div>
+        <div class="agent-profile-tier">${escapeHtml(tierLabel)}</div>
+        <div class="agent-profile-stats">
+          <span>Balance: $${Number(p.balance ?? 0).toLocaleString()}</span>
+          <span class="agent-profile-pnl ${pnl24hClass}">24h: ${pnl24hStr}</span>
+          <span>Valuations: ${Number(p.valuationCount ?? 0).toLocaleString()}</span>
+        </div>
+        <div class="agent-profile-activity">Last activity: ${lastActivity}</div>
+      </div>
+    `;
+  });
+  if (state.agentProfilesLoading) {
+    return '<p class="agent-profiles-empty">Loading…</p>';
+  }
+  return profileCards.length > 0 ? profileCards.join('') : '<p class="agent-profiles-empty">No agent profiles yet</p>';
 }
 
 function renderLeaderboardContent() {
@@ -413,32 +445,6 @@ function renderLanding() {
       </a>
     `;
   });
-  const profiles = state.agentProfiles || [];
-  const profileCards = profiles.map((p) => {
-    const pnl24h = p.pnl24h != null ? Number(p.pnl24h) : 0;
-    const pnl24hStr = pnl24h >= 0 ? `+$${Math.abs(pnl24h).toLocaleString()}` : `-$${Math.abs(pnl24h).toLocaleString()}`;
-    const pnl24hClass = pnl24h >= 0 ? 'agent-profile-pnl-up' : 'agent-profile-pnl-down';
-    const tierLabel = (p.trustTier || 'UNVERIFIED').replace(/_/g, ' ');
-    const lastActivity = p.lastActivityAt
-      ? new Date(p.lastActivityAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : '—';
-    return `
-      <div class="agent-profile-card">
-        <div class="agent-profile-name">${escapeHtml(p.name || 'Agent')}</div>
-        <div class="agent-profile-tier">${escapeHtml(tierLabel)}</div>
-        <div class="agent-profile-stats">
-          <span>Balance: $${Number(p.balance ?? 0).toLocaleString()}</span>
-          <span class="agent-profile-pnl ${pnl24hClass}">24h: ${pnl24hStr}</span>
-          <span>Valuations: ${Number(p.valuationCount ?? 0).toLocaleString()}</span>
-        </div>
-        <div class="agent-profile-activity">Last activity: ${lastActivity}</div>
-      </div>
-    `;
-  });
-  const profilesContent = state.agentProfilesLoading
-    ? '<p class="agent-profiles-empty">Loading…</p>'
-    : (profileCards.length > 0 ? profileCards.join('') : '<p class="agent-profiles-empty">No agent profiles yet</p>');
-
   const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
   root.innerHTML = `
     <div class="landing">
@@ -472,7 +478,7 @@ function renderLanding() {
       <div class="landing-agent-profiles">
         <h3 class="landing-agent-profiles-title">Agent profiles</h3>
         <div class="agent-profiles-grid">
-          ${profilesContent}
+          ${renderAgentProfilesContent()}
         </div>
       </div>
     </div>
@@ -795,6 +801,12 @@ function renderApp() {
               <aside class="market-layout-sidebar">
                 ${renderLeaderboardPanel()}
               </aside>
+            </div>
+            <div class="landing-agent-profiles">
+              <h3 class="landing-agent-profiles-title">Agent profiles</h3>
+              <div class="agent-profiles-grid">
+                ${renderAgentProfilesContent()}
+              </div>
             </div>
           </div>
         `;
