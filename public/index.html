@@ -623,33 +623,43 @@
     }
     .home-tabs {
       display: flex;
-      gap: 0;
-      margin-top: var(--space-24);
-      margin-bottom: 0;
-      border-bottom: 1px solid var(--color-dark-border);
+      gap: var(--space-8);
+      margin-top: var(--space-32);
+      margin-bottom: var(--space-32);
+      flex-wrap: wrap;
     }
     .home-tab {
-      padding: var(--space-12) var(--space-20);
-      font-size: 0.9rem;
+      padding: var(--space-12) var(--space-24);
+      font-size: 0.95rem;
       font-weight: 500;
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -1px;
+      font-family: var(--font-display);
+      letter-spacing: 0.01em;
+      background: rgba(20, 27, 45, 0.6);
+      border: 1px solid var(--color-dark-border);
+      border-radius: var(--radius);
       color: var(--color-dark-muted);
       cursor: pointer;
-      font-family: inherit;
+      transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
     }
     .home-tab:hover {
       color: var(--color-dark-text);
+      border-color: rgba(34, 211, 238, 0.35);
+      background: rgba(20, 27, 45, 0.9);
     }
     .home-tab.active {
       color: var(--color-accent);
-      border-bottom-color: var(--color-accent);
+      border-color: var(--color-accent);
+      background: rgba(34, 211, 238, 0.08);
+      box-shadow: 0 0 16px var(--color-accent-dim);
     }
     .home-tab-panel {
       display: none;
-      padding-top: var(--space-24);
+      padding-top: 0;
+      animation: home-tab-fade 0.2s ease;
+    }
+    @keyframes home-tab-fade {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
     .home-tab-panel.active {
       display: block;
@@ -669,56 +679,78 @@
     .leaderboard-list {
       display: flex;
       flex-direction: column;
-      gap: var(--space-8);
+      gap: 0;
     }
     .leaderboard-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: 3rem 1fr auto;
       align-items: center;
       gap: var(--space-16);
       padding: var(--space-12) var(--space-16);
-      background: var(--color-dark-surface);
-      border: 1px solid var(--color-dark-border);
-      border-radius: var(--radius-sm);
-      font-size: 0.9rem;
+      font-size: 0.95rem;
+      border-bottom: 1px solid var(--color-dark-border);
+    }
+    .leaderboard-row:last-child {
+      border-bottom: none;
+    }
+    .leaderboard-row:hover {
+      background: rgba(255, 255, 255, 0.02);
     }
     .leaderboard-rank {
       font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 500;
       color: var(--color-dark-muted);
-      min-width: 2em;
     }
     .leaderboard-name {
-      flex: 1;
       color: var(--color-dark-text);
       font-weight: 500;
     }
     .leaderboard-pnl {
       font-family: var(--font-mono);
       font-variant-numeric: tabular-nums;
+      font-weight: 500;
     }
     .leaderboard-pnl-up {
-      color: var(--color-bid);
+      color: var(--color-accent);
     }
     .leaderboard-pnl-down {
-      color: var(--color-ask);
+      color: #f87171;
     }
     .leaderboard-empty {
       color: var(--color-dark-muted);
-      font-size: 0.9rem;
+      font-size: 0.95rem;
+      padding: var(--space-24);
+      text-align: center;
     }
     .leaderboard-panel {
       background: var(--color-dark-surface);
       border: 1px solid var(--color-dark-border);
       border-radius: var(--radius);
-      padding: var(--space-20);
+      overflow: hidden;
     }
     .leaderboard-panel-title {
-      margin: 0 0 var(--space-12);
+      margin: 0;
+      padding: var(--space-16) var(--space-24);
       font-family: var(--font-display);
-      font-size: 0.9rem;
+      font-size: 1rem;
       font-weight: 600;
-      letter-spacing: 0.04em;
+      color: var(--color-dark-text);
+      border-bottom: 1px solid var(--color-dark-border);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .leaderboard-list-header {
+      display: grid;
+      grid-template-columns: 3rem 1fr auto;
+      gap: var(--space-16);
+      padding: var(--space-12) var(--space-16);
+      font-size: 0.75rem;
+      font-weight: 600;
       text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--color-dark-muted);
+      border-bottom: 1px solid var(--color-dark-border);
+      background: rgba(0, 0, 0, 0.15);
     }
     .market-layout {
       display: flex;

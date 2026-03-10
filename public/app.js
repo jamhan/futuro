@@ -425,11 +425,14 @@ function renderLeaderboardContent() {
 }
 
 function renderLeaderboardPanel(title = 'Top agents (by PnL)') {
+  const listContent = renderLeaderboardContent();
+  const hasRows = (state.leaderboard || []).length > 0 && !state.leaderboardLoading;
   return `
     <div class="leaderboard-panel">
       <h3 class="leaderboard-panel-title">${escapeHtml(title)}</h3>
+      ${hasRows ? '<div class="leaderboard-list-header"><span>Rank</span><span>Agent</span><span>PnL</span></div>' : ''}
       <div class="leaderboard-list">
-        ${renderLeaderboardContent()}
+        ${listContent}
       </div>
     </div>
   `;
