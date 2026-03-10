@@ -44,6 +44,7 @@ let state = {
   agentProfiles: [], // { name, trustTier, balance, pnl24h, ... } from GET /api/agents/profiles
   agentProfilesLoading: true,
   liveActivity: [], // Recent trade events for ticker: { agentName, side, price, quantity, time }
+  homeTab: (typeof localStorage !== 'undefined' && localStorage.getItem('homeTab')) || 'markets', // 'markets' | 'leaderboard' | 'profiles'
 };
 
 let marketWs = null;
@@ -315,6 +316,12 @@ function clearUserMode() {
   loadMarketsForLanding();
 }
 
+function setHomeTab(tab) {
+  state.homeTab = tab;
+  if (typeof localStorage !== 'undefined') localStorage.setItem('homeTab', tab);
+  renderApp();
+}
+
 async function loadLeaderboard() {
   state.leaderboardLoading = true;
   try {
@@ -445,6 +452,7 @@ function renderLanding() {
       </a>
     `;
   });
+  const tab = state.homeTab || 'markets';
   const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
   root.innerHTML = `
     <div class="landing">
@@ -466,19 +474,30 @@ function renderLanding() {
           </button>
         </div>
       </div>
-      <div class="landing-markets">
-        <h3 class="landing-markets-title">Live markets (sample)</h3>
-        <div class="market-preview-grid">
-          ${cards.length > 0 ? cards.join('') : '<p class="market-preview-empty">No open markets</p>'}
+      <div class="home-tabs">
+        <button type="button" class="home-tab ${tab === 'markets' ? 'active' : ''}" onclick="setHomeTab('markets')">Markets</button>
+        <button type="button" class="home-tab ${tab === 'leaderboard' ? 'active' : ''}" onclick="setHomeTab('leaderboard')">Leaderboard</button>
+        <button type="button" class="home-tab ${tab === 'profiles' ? 'active' : ''}" onclick="setHomeTab('profiles')">Profiles</button>
+      </div>
+      <div class="home-tab-panel ${tab === 'markets' ? 'active' : ''}" data-tab="markets">
+        <div class="landing-markets">
+          <h3 class="landing-markets-title">Live markets (sample)</h3>
+          <div class="market-preview-grid">
+            ${cards.length > 0 ? cards.join('') : '<p class="market-preview-empty">No open markets</p>'}
+          </div>
         </div>
       </div>
-      <div class="landing-leaderboard">
-        ${renderLeaderboardPanel()}
+      <div class="home-tab-panel ${tab === 'leaderboard' ? 'active' : ''}" data-tab="leaderboard">
+        <div class="landing-leaderboard">
+          ${renderLeaderboardPanel()}
+        </div>
       </div>
-      <div class="landing-agent-profiles">
-        <h3 class="landing-agent-profiles-title">Agent profiles</h3>
-        <div class="agent-profiles-grid">
-          ${renderAgentProfilesContent()}
+      <div class="home-tab-panel ${tab === 'profiles' ? 'active' : ''}" data-tab="profiles">
+        <div class="landing-agent-profiles">
+          <h3 class="landing-agent-profiles-title">Agent profiles</h3>
+          <div class="agent-profiles-grid">
+            ${renderAgentProfilesContent()}
+          </div>
         </div>
       </div>
     </div>
@@ -632,7 +651,8 @@ function renderStationGrid(stations) {
   `;
 }
 
-function renderMarketPicker(markets) {
+/** Returns only the category tabs + panels (no top bar or header). Used when picker is inside a tab. */
+function renderMarketPickerContent(markets) {
   const byCategory = groupMarketsByCategoryTypeAndStation(markets);
   const energyTypes = ENERGY_INDEX_TYPES.filter(t => byCategory.energy[t] && Object.keys(byCategory.energy[t]).length > 0);
   const weatherTypes = WEATHER_INDEX_TYPES.filter(t => byCategory.weather[t] && Object.keys(byCategory.weather[t]).length > 0);
@@ -646,25 +666,7 @@ function renderMarketPicker(markets) {
   const firstEnergyType = allEnergyTypes[0] || null;
   const firstWeatherType = allWeatherTypes[0] || null;
 
-  const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
-  const observerLinks =
-    state.userMode === 'observer'
-      ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a> <span class="picker-sep">|</span> <a href="#" onclick="state.userMode=\'trader\'; localStorage.setItem(\'userMode\',\'trader\'); renderApp(); return false;" class="switch-mode-link">Create account to trade</a>'
-      : '';
   let html = `
-    <div class="picker-top">
-      <h1 class="picker-site-title">OracleBook</h1>
-      <div class="picker-top-links">
-        <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
-        <span class="picker-sep">|</span>
-        <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="nav-docs-link">oraclebook.xyz</a>
-        ${observerLinks ? `<span class="picker-sep">|</span> ${observerLinks}` : ''}
-      </div>
-    </div>
-    <div class="market-info picker-header">
-      <h2>Select a market</h2>
-      <p style="margin-bottom: 0; color: #666;">Choose by category, type, location and period.</p>
-    </div>
     <div class="picker-category-tabs">
       ${allEnergyTypes.length > 0 ? `
         <button type="button" class="picker-tab picker-category-tab tab-energy ${firstCategory === 'energy' ? 'active' : ''}" data-category="energy">
@@ -712,6 +714,30 @@ function renderMarketPicker(markets) {
   }
 
   return html;
+}
+
+function renderMarketPicker(markets) {
+  const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+  const observerLinks =
+    state.userMode === 'observer'
+      ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a> <span class="picker-sep">|</span> <a href="#" onclick="state.userMode=\'trader\'; localStorage.setItem(\'userMode\',\'trader\'); renderApp(); return false;" class="switch-mode-link">Create account to trade</a>'
+      : '';
+  return `
+    <div class="picker-top">
+      <h1 class="picker-site-title">OracleBook</h1>
+      <div class="picker-top-links">
+        <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
+        <span class="picker-sep">|</span>
+        <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="nav-docs-link">oraclebook.xyz</a>
+        ${observerLinks ? `<span class="picker-sep">|</span> ${observerLinks}` : ''}
+      </div>
+    </div>
+    <div class="market-info picker-header">
+      <h2>Select a market</h2>
+      <p style="margin-bottom: 0; color: #666;">Choose by category, type, location and period.</p>
+    </div>
+    ${renderMarketPickerContent(markets)}
+  `;
 }
 
 function attachPickerListeners() {
@@ -793,19 +819,47 @@ function renderApp() {
         loadMarkets();
         root.innerHTML = '<div class="page-dark"><div class="loading-state">Loading markets...</div></div>';
       } else {
-        const pickerHtml = renderMarketPicker(state.markets);
+        const pickerContent = renderMarketPickerContent(state.markets);
+        const tab = state.homeTab || 'markets';
+        const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+        const observerLinks =
+          state.userMode === 'observer'
+            ? '<a href="#" onclick="clearUserMode(); return false;" class="switch-mode-link">Switch mode</a> <span class="picker-sep">|</span> <a href="#" onclick="state.userMode=\'trader\'; localStorage.setItem(\'userMode\',\'trader\'); renderApp(); return false;" class="switch-mode-link">Create account to trade</a>'
+            : '';
         root.innerHTML = `
           <div class="page-dark">
-            <div class="market-layout">
-              <div class="market-layout-main">${pickerHtml}</div>
-              <aside class="market-layout-sidebar">
-                ${renderLeaderboardPanel()}
-              </aside>
+            <div class="picker-top">
+              <h1 class="picker-site-title">OracleBook</h1>
+              <div class="picker-top-links">
+                <a href="${base}/docs/agent/SKILL.md" target="_blank" rel="noopener" class="nav-docs-link">Docs</a>
+                <span class="picker-sep">|</span>
+                <a href="https://oraclebook.xyz" target="_blank" rel="noopener" class="nav-docs-link">oraclebook.xyz</a>
+                ${observerLinks ? `<span class="picker-sep">|</span> ${observerLinks}` : ''}
+              </div>
             </div>
-            <div class="landing-agent-profiles">
-              <h3 class="landing-agent-profiles-title">Agent profiles</h3>
-              <div class="agent-profiles-grid">
-                ${renderAgentProfilesContent()}
+            <div class="home-tabs">
+              <button type="button" class="home-tab ${tab === 'markets' ? 'active' : ''}" onclick="setHomeTab('markets')">Markets</button>
+              <button type="button" class="home-tab ${tab === 'leaderboard' ? 'active' : ''}" onclick="setHomeTab('leaderboard')">Leaderboard</button>
+              <button type="button" class="home-tab ${tab === 'profiles' ? 'active' : ''}" onclick="setHomeTab('profiles')">Profiles</button>
+            </div>
+            <div class="home-tab-panel ${tab === 'markets' ? 'active' : ''}" data-tab="markets">
+              <div class="market-info picker-header">
+                <h2>Select a market</h2>
+                <p style="margin-bottom: 0; color: #666;">Choose by category, type, location and period.</p>
+              </div>
+              ${pickerContent}
+            </div>
+            <div class="home-tab-panel ${tab === 'leaderboard' ? 'active' : ''}" data-tab="leaderboard">
+              <div class="landing-leaderboard">
+                ${renderLeaderboardPanel()}
+              </div>
+            </div>
+            <div class="home-tab-panel ${tab === 'profiles' ? 'active' : ''}" data-tab="profiles">
+              <div class="landing-agent-profiles">
+                <h3 class="landing-agent-profiles-title">Agent profiles</h3>
+                <div class="agent-profiles-grid">
+                  ${renderAgentProfilesContent()}
+                </div>
               </div>
             </div>
           </div>
@@ -1021,6 +1075,7 @@ window.togglePriceField = togglePriceField;
 window.submitInviteCode = submitInviteCode;
 window.setUserMode = setUserMode;
 window.clearUserMode = clearUserMode;
+window.setHomeTab = setHomeTab;
 
 window.addEventListener('popstate', () => {
   const marketId = new URLSearchParams(window.location.search).get('market');

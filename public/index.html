@@ -621,8 +621,41 @@
       color: var(--color-dark-muted);
       font-size: 0.9rem;
     }
+    .home-tabs {
+      display: flex;
+      gap: 0;
+      margin-top: var(--space-24);
+      margin-bottom: 0;
+      border-bottom: 1px solid var(--color-dark-border);
+    }
+    .home-tab {
+      padding: var(--space-12) var(--space-20);
+      font-size: 0.9rem;
+      font-weight: 500;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      color: var(--color-dark-muted);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .home-tab:hover {
+      color: var(--color-dark-text);
+    }
+    .home-tab.active {
+      color: var(--color-accent);
+      border-bottom-color: var(--color-accent);
+    }
+    .home-tab-panel {
+      display: none;
+      padding-top: var(--space-24);
+    }
+    .home-tab-panel.active {
+      display: block;
+    }
     .landing-leaderboard {
-      margin-top: var(--space-32);
+      margin-top: 0;
     }
     .landing-leaderboard-title {
       font-family: var(--font-display);
